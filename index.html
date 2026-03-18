@@ -3,580 +3,328 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SOD Database · CD-HIT 95% Dereplication Analysis</title>
+<title>Fungi SOD Database · CD-HIT 95% Dereplication Analysis</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
 <style>
   :root {
-    --bg:        #0d0f0e;
-    --bg2:       #141614;
-    --bg3:       #1a1d1a;
-    --border:    rgba(255,255,255,0.07);
-    --border2:   rgba(255,255,255,0.14);
-    --text:      #e8ebe6;
-    --muted:     #7a8078;
-    --kept:      #4ade9a;
-    --removed:   #f06448;
-    --accent:    #c8f060;
-    --kept-dim:  rgba(74,222,154,0.15);
-    --rem-dim:   rgba(240,100,72,0.15);
-    --card-r:    10px;
+    --bg:       #f5f5f2;
+    --bg2:      #ffffff;
+    --bg3:      #eeede9;
+    --border:   rgba(0,0,0,0.08);
+    --border2:  rgba(0,0,0,0.16);
+    --text:     #1a1c19;
+    --muted:    #6b7068;
+    --kept:     #1a8f56;
+    --removed:  #c43d20;
+    --accent:   #4a7c10;
+    --blue:     #1a6fab;
+    --amber:    #c47020;
+    --card-r:   10px;
   }
-
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'DM Mono', monospace; font-size: 13px; line-height: 1.6; min-height: 100vh; }
 
-  body {
-    background: var(--bg);
-    color: var(--text);
-    font-family: 'DM Mono', monospace;
-    font-size: 13px;
-    line-height: 1.6;
-    min-height: 100vh;
-  }
-
-  /* ── Header ── */
-  header {
-    padding: 52px 48px 36px;
-    border-bottom: 1px solid var(--border);
-    display: flex;
-    align-items: flex-end;
-    justify-content: space-between;
-    gap: 24px;
-    flex-wrap: wrap;
-  }
-  .header-left {}
-  .eyebrow {
-    font-family: 'DM Mono', monospace;
-    font-size: 11px;
-    letter-spacing: 0.12em;
-    color: var(--accent);
-    text-transform: uppercase;
-    margin-bottom: 10px;
-  }
-  h1 {
-    font-family: 'Syne', sans-serif;
-    font-size: clamp(28px, 4vw, 46px);
-    font-weight: 800;
-    line-height: 1.05;
-    letter-spacing: -0.02em;
-    color: var(--text);
-  }
+  header { padding: 48px 48px 32px; border-bottom: 1px solid var(--border); display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; flex-wrap: wrap; }
+  .eyebrow { font-size: 11px; letter-spacing: 0.12em; color: var(--accent); text-transform: uppercase; margin-bottom: 10px; }
+  h1 { font-family: 'Syne', sans-serif; font-size: clamp(26px, 3.5vw, 42px); font-weight: 800; line-height: 1.05; letter-spacing: -0.02em; }
   h1 span { color: var(--kept); }
-  .subtitle {
-    margin-top: 10px;
-    color: var(--muted);
-    font-size: 12px;
-    max-width: 480px;
-  }
-  .header-meta {
-    display: flex;
-    gap: 32px;
-    align-items: center;
-  }
+  .subtitle { margin-top: 10px; color: var(--muted); font-size: 12px; max-width: 480px; line-height: 1.6; }
+  .header-meta { display: flex; gap: 28px; align-items: center; }
   .meta-item { text-align: right; }
-  .meta-num {
-    font-family: 'Syne', sans-serif;
-    font-size: 28px;
-    font-weight: 700;
-    display: block;
-    line-height: 1;
-  }
+  .meta-num { font-family: 'Syne', sans-serif; font-size: 26px; font-weight: 700; display: block; line-height: 1; }
   .meta-label { font-size: 10px; color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase; margin-top: 4px; }
+  .sep { width: 1px; height: 36px; background: var(--border); }
 
-  /* ── Layout ── */
-  main {
-    padding: 36px 48px 64px;
-    display: flex;
-    flex-direction: column;
-    gap: 20px;
-    max-width: 1400px;
-  }
+  main { padding: 32px 48px 60px; display: flex; flex-direction: column; gap: 16px; max-width: 1400px; }
 
-  /* ── Metrics strip ── */
-  .metrics {
-    display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 12px;
-  }
-  .metric {
-    background: var(--bg2);
-    border: 1px solid var(--border);
-    border-radius: var(--card-r);
-    padding: 20px 22px;
-    position: relative;
-    overflow: hidden;
-    transition: border-color 0.2s;
-  }
-  .metric:hover { border-color: var(--border2); }
-  .metric::before {
-    content: '';
-    position: absolute;
-    top: 0; left: 0; right: 0;
-    height: 2px;
-    border-radius: 2px 2px 0 0;
-  }
+  .metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+  .metric { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--card-r); padding: 18px 20px; position: relative; overflow: hidden; }
+  .metric::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px; border-radius: 2px 2px 0 0; }
   .metric.kept::before  { background: var(--kept); }
   .metric.rem::before   { background: var(--removed); }
-  .metric.neut::before  { background: var(--accent); }
-  .metric.info::before  { background: #60a8f0; }
-  .metric-label { font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; }
-  .metric-val {
-    font-family: 'Syne', sans-serif;
-    font-size: 32px;
-    font-weight: 700;
-    line-height: 1;
-  }
-  .metric.kept .metric-val  { color: var(--kept); }
-  .metric.rem .metric-val   { color: var(--removed); }
-  .metric.neut .metric-val  { color: var(--accent); }
-  .metric.info .metric-val  { color: #60a8f0; }
-  .metric-sub { font-size: 11px; color: var(--muted); margin-top: 6px; }
+  .metric.amb::before   { background: var(--amber); }
+  .metric.blu::before   { background: var(--blue); }
+  .metric-label { font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
+  .metric-val { font-family: 'Syne', sans-serif; font-size: 30px; font-weight: 700; line-height: 1; }
+  .metric.kept .metric-val { color: var(--kept); }
+  .metric.rem  .metric-val { color: var(--removed); }
+  .metric.amb  .metric-val { color: var(--amber); }
+  .metric.blu  .metric-val { color: var(--blue); }
+  .metric-sub { font-size: 11px; color: var(--muted); margin-top: 5px; }
 
-  /* ── Grid ── */
-  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-  .grid-3 { display: grid; grid-template-columns: 2fr 1fr; gap: 16px; }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .grid-3 { display: grid; grid-template-columns: 3fr 2fr; gap: 14px; }
 
-  /* ── Card ── */
-  .card {
-    background: var(--bg2);
-    border: 1px solid var(--border);
-    border-radius: var(--card-r);
-    padding: 22px 24px;
-    transition: border-color 0.2s;
-  }
-  .card:hover { border-color: var(--border2); }
-  .card-title {
-    font-family: 'Syne', sans-serif;
-    font-size: 13px;
-    font-weight: 600;
-    letter-spacing: 0.02em;
-    color: var(--text);
-    margin-bottom: 4px;
-  }
-  .card-sub {
-    font-size: 11px;
-    color: var(--muted);
-    margin-bottom: 16px;
-    line-height: 1.5;
-  }
+  .card { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--card-r); padding: 20px 22px; }
+  .card-title { font-family: 'Syne', sans-serif; font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 3px; }
+  .card-sub { font-size: 11px; color: var(--muted); margin-bottom: 14px; line-height: 1.5; }
   .canvas-wrap { position: relative; width: 100%; }
+  .legend { display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 10px; }
+  .legend-item { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--muted); }
+  .legend-dot { width: 9px; height: 9px; border-radius: 2px; flex-shrink: 0; }
 
-  /* ── Legend ── */
-  .legend {
-    display: flex;
-    gap: 16px;
-    margin-bottom: 12px;
-    flex-wrap: wrap;
-  }
-  .legend-item {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 11px;
-    color: var(--muted);
-  }
-  .legend-dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 2px;
-    flex-shrink: 0;
-  }
+  .insight { margin-top: 10px; padding: 10px 14px; background: var(--bg3); border-left: 2px solid var(--kept); border-radius: 0 6px 6px 0; font-size: 11px; color: var(--muted); line-height: 1.7; }
+  .insight strong { font-weight: 500; }
+  .insight.warn { border-left-color: var(--amber); }
+  .insight.info { border-left-color: var(--blue); }
+  .insight.warn strong { color: var(--amber); }
+  .insight.info strong { color: var(--blue); }
+  .insight strong { color: var(--kept); }
 
-  /* ── Insight badge ── */
-  .insight {
-    margin-top: 12px;
-    padding: 10px 14px;
-    background: var(--bg3);
-    border-left: 2px solid var(--accent);
-    border-radius: 0 6px 6px 0;
-    font-size: 11px;
-    color: var(--muted);
-    line-height: 1.6;
-  }
-  .insight strong { color: var(--accent); font-weight: 500; }
+  .funnel { display: flex; height: 48px; border-radius: 8px; overflow: hidden; margin-bottom: 12px; }
+  .funnel-kept { display: flex; align-items: center; justify-content: center; font-family: 'Syne', sans-serif; font-size: 12px; font-weight: 600; color: var(--kept); background: rgba(26,143,86,0.12); border-right: 1px solid rgba(26,143,86,0.25); width: 40.3%; }
+  .funnel-removed { flex: 1; display: flex; align-items: center; justify-content: center; font-family: 'Syne', sans-serif; font-size: 12px; font-weight: 600; color: var(--removed); background: rgba(196,61,32,0.09); }
 
-  /* ── Full-width bar (funnel viz) ── */
-  .funnel {
-    display: flex;
-    align-items: center;
-    gap: 0;
-    height: 52px;
-    border-radius: 8px;
-    overflow: hidden;
-    margin-bottom: 14px;
-  }
-  .funnel-kept {
-    height: 100%;
-    background: linear-gradient(135deg, rgba(74,222,154,0.25), rgba(74,222,154,0.12));
-    border-right: 1px solid rgba(74,222,154,0.3);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-family: 'Syne', sans-serif;
-    font-size: 12px;
-    font-weight: 600;
-    color: var(--kept);
-    transition: width 0.8s cubic-bezier(0.4,0,0.2,1);
-  }
-  .funnel-removed {
-    height: 100%;
-    flex: 1;
-    background: linear-gradient(135deg, rgba(240,100,72,0.2), rgba(240,100,72,0.08));
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-family: 'Syne', sans-serif;
-    font-size: 12px;
-    font-weight: 600;
-    color: var(--removed);
-  }
+  /* Claude Review */
+  .review { border-color: rgba(26,107,171,0.2); position: relative; overflow: hidden; }
+  .review::after { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px; background: linear-gradient(90deg, var(--blue), var(--kept)); }
+  .review-header { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+  .review-avatar { width: 26px; height: 26px; border-radius: 50%; background: rgba(26,107,171,0.08); border: 0.5px solid rgba(26,107,171,0.25); display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; color: var(--blue); font-family: 'Syne', sans-serif; }
+  .review-name { font-family: 'Syne', sans-serif; font-size: 13px; font-weight: 600; color: var(--blue); }
+  .review-meta { font-size: 10px; color: var(--muted); letter-spacing: 0.06em; }
+  .review-block { padding: 12px 14px; background: var(--bg3); border-radius: 8px; margin-bottom: 10px; }
+  .review-block:last-child { margin-bottom: 0; }
+  .review-tag { font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 5px; font-weight: 500; }
+  .review-block p { font-size: 12px; line-height: 1.8; color: var(--text); margin: 0; }
+  .rb-blue   { border-left: 2px solid var(--blue);    } .rb-blue   .review-tag { color: var(--blue); }
+  .rb-amber  { border-left: 2px solid var(--amber);   } .rb-amber  .review-tag { color: var(--amber); }
+  .rb-green  { border-left: 2px solid var(--kept);    } .rb-green  .review-tag { color: var(--kept); }
+  .rb-red    { border-left: 2px solid var(--removed); } .rb-red    .review-tag { color: var(--removed); }
 
-  /* ── Footer ── */
-  footer {
-    padding: 20px 48px;
-    border-top: 1px solid var(--border);
-    font-size: 11px;
-    color: var(--muted);
-    display: flex;
-    justify-content: space-between;
-    flex-wrap: wrap;
-    gap: 8px;
-  }
+  footer { padding: 18px 48px; border-top: 1px solid var(--border); font-size: 11px; color: var(--muted); display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
   footer span { color: var(--accent); }
 </style>
 </head>
 <body>
 
 <header>
-  <div class="header-left">
-    <p class="eyebrow">Bioinformatics · Sequence Analysis</p>
-    <h1>bacteria SOD<br><span>dereplication</span> report</h1>
-    <p class="subtitle">
-      UniProt细菌超氧化物歧化酶数据库经CD-HIT（阈值95%）去冗余前后对比分析
-      — 序列多样性、长度分布与SOD类型保留特征
-    </p>
+  <div>
+    <p class="eyebrow">Bioinformatics · Sequence Analysis · Fungi</p>
+    <h1>fungi SOD<br><span>dereplication</span> report</h1>
+    <p class="subtitle">UniProt真菌超氧化物歧化酶数据库经CD-HIT（阈值95%）去冗余前后对比分析 — 序列多样性、长度分布、SOD类型与分类群保留特征</p>
   </div>
   <div class="header-meta">
-    <div class="meta-item">
-      <span class="meta-num" style="color:var(--kept)">21,432</span>
-      <div class="meta-label">保留 · TSV</div>
-    </div>
-    <div style="width:1px;height:40px;background:var(--border);"></div>
-    <div class="meta-item">
-      <span class="meta-num" style="color:var(--removed)">26,118</span>
-      <div class="meta-label">移除 · XLSX</div>
-    </div>
-    <div style="width:1px;height:40px;background:var(--border);"></div>
-    <div class="meta-item">
-      <span class="meta-num" style="color:var(--accent)">47,550</span>
-      <div class="meta-label">原始总量</div>
-    </div>
+    <div class="meta-item"><span class="meta-num" style="color:var(--kept)">4,074</span><div class="meta-label">保留 · TSV</div></div>
+    <div class="sep"></div>
+    <div class="meta-item"><span class="meta-num" style="color:var(--removed)">6,032</span><div class="meta-label">移除 · XLSX</div></div>
+    <div class="sep"></div>
+    <div class="meta-item"><span class="meta-num" style="color:var(--blue)">10,106</span><div class="meta-label">原始总量</div></div>
   </div>
 </header>
 
 <main>
 
-  <!-- Metrics -->
   <div class="metrics">
-    <div class="metric kept">
-      <div class="metric-label">Retention Rate</div>
-      <div class="metric-val">45.1%</div>
-      <div class="metric-sub">经聚类后保留的序列比例</div>
-    </div>
-    <div class="metric rem">
-      <div class="metric-label">Redundancy Removed</div>
-      <div class="metric-val">54.9%</div>
-      <div class="metric-sub">相似度 ≥95% 被代表序列合并</div>
-    </div>
-    <div class="metric neut">
-      <div class="metric-label">Mean Length · Kept</div>
-      <div class="metric-val">193.5</div>
-      <div class="metric-sub">aa ± 25.1 SD</div>
-    </div>
-    <div class="metric info">
-      <div class="metric-label">Mean Length · Removed</div>
-      <div class="metric-val">198.0</div>
-      <div class="metric-sub">aa ± 57.5 SD（变异更大）</div>
-    </div>
+    <div class="metric blu"><div class="metric-label">原始数据库</div><div class="metric-val">10,106</div><div class="metric-sub">真菌SOD蛋白条目</div></div>
+    <div class="metric kept"><div class="metric-label">CD-HIT 95% 保留</div><div class="metric-val">4,074</div><div class="metric-sub">非冗余代表序列</div></div>
+    <div class="metric rem"><div class="metric-label">移除冗余</div><div class="metric-val">6,032</div><div class="metric-sub">相似度 ≥95% 合并</div></div>
+    <div class="metric amb"><div class="metric-label">压缩比</div><div class="metric-val">59.7%</div><div class="metric-sub">高于细菌数据集54.9%</div></div>
   </div>
 
-  <!-- Funnel + overview -->
   <div class="card">
     <div class="card-title">数据集压缩概览</div>
-    <div class="card-sub">原始 47,550 条目中保留 21,432，移除 26,118 条冗余序列</div>
+    <div class="card-sub">真菌SOD原始 10,106 → 保留 4,074，压缩率高于细菌数据集（54.9%）</div>
     <div class="funnel">
-      <div class="funnel-kept" style="width:45.1%">45.1% kept</div>
-      <div class="funnel-removed">54.9% removed</div>
+      <div class="funnel-kept">40.3% kept</div>
+      <div class="funnel-removed">59.7% removed</div>
     </div>
-    <div class="insight">
-      <strong>CD-HIT 95%</strong> 将数据集从 47,550 压缩至 21,432 条，压缩比接近 2:1。
-      TSV 中所有条目均可在 XLSX 中溯源，说明去冗余完全保保留了原始数据的子集特性，无新增条目。
-    </div>
+    <div class="insight info"><strong>vs 细菌数据集：</strong>真菌数据压缩率（59.7%）更高，说明真菌SOD序列冗余程度更严重，单物种多株系测序数据贡献了大量高相似序列。</div>
   </div>
 
-  <!-- Length dist + SOD type -->
   <div class="grid-2">
     <div class="card">
       <div class="card-title">序列长度分布（堆叠）</div>
-      <div class="card-sub">各长度区间内保留 vs 移除的条目数量</div>
+      <div class="card-sub">各长度区间保留 vs 移除数量</div>
       <div class="legend">
-        <div class="legend-item"><span class="legend-dot" style="background:var(--kept);opacity:0.8"></span>保留 (TSV)</div>
-        <div class="legend-item"><span class="legend-dot" style="background:var(--removed);opacity:0.8"></span>移除</div>
+        <div class="legend-item"><span class="legend-dot" style="background:rgba(26,143,86,0.7)"></span>保留</div>
+        <div class="legend-item"><span class="legend-dot" style="background:rgba(196,61,32,0.65)"></span>移除</div>
       </div>
       <div class="canvas-wrap" style="height:220px"><canvas id="lenStack"></canvas></div>
     </div>
     <div class="card">
       <div class="card-title">SOD 类型保留率</div>
-      <div class="card-sub">各 cofactor 类型的序列保留百分比（%）</div>
-      <div class="canvas-wrap" style="height:256px"><canvas id="sodRetention"></canvas></div>
-      <div class="insight">
-        <strong>Cu/Zn-SOD</strong> 保留率最高（57%），<strong>Fe/Mn-SOD</strong> 保留率仅 24–27%，
-        说明 Fe/Mn 类型在细菌中序列高度保守，冗余极大。
-      </div>
+      <div class="card-sub">各 cofactor 类型保留百分比</div>
+      <div class="canvas-wrap" style="height:200px"><canvas id="sodBar"></canvas></div>
+      <div class="insight"><strong>Mn-SOD</strong>（50.7%）与 <strong>Cu/Zn-SOD</strong>（54.4%）保留率接近，与细菌数据差异显著——真菌Mn-SOD多样性远高于细菌。</div>
     </div>
   </div>
 
-  <!-- Removal rate + histogram -->
   <div class="grid-2">
     <div class="card">
-      <div class="card-title">各长度区间移除率 (%)</div>
-      <div class="card-sub">颜色深浅对应移除率高低；&lt;100aa 和 >250aa 几乎全部移除</div>
+      <div class="card-title">各长度区间移除率</div>
+      <div class="card-sub">&lt;100aa 与 &gt;250aa 全部移除；175–220aa 保留率最高</div>
       <div class="canvas-wrap" style="height:220px"><canvas id="remRate"></canvas></div>
     </div>
     <div class="card">
       <div class="card-title">序列长度连续分布</div>
-      <div class="card-sub">保留与移除序列的长度频率直方图（组距 15aa）</div>
+      <div class="card-sub">组距 15aa · 保留均值 204.5aa，移除均值 269.2aa</div>
       <div class="legend">
-        <div class="legend-item"><span class="legend-dot" style="background:var(--kept);opacity:0.6"></span>保留 均值 193.5aa</div>
-        <div class="legend-item"><span class="legend-dot" style="background:var(--removed);opacity:0.6"></span>移除 均值 198.0aa</div>
+        <div class="legend-item"><span class="legend-dot" style="background:rgba(26,143,86,0.6)"></span>保留</div>
+        <div class="legend-item"><span class="legend-dot" style="background:rgba(196,61,32,0.55)"></span>移除</div>
       </div>
-      <div class="canvas-wrap" style="height:220px"><canvas id="histChart"></canvas></div>
+      <div class="canvas-wrap" style="height:205px"><canvas id="hist"></canvas></div>
     </div>
   </div>
 
-  <!-- Organisms -->
-  <div class="card">
-    <div class="card-title">移除最多的物种 Top 12</div>
-    <div class="card-sub">这些物种在原始数据库中存在大量高相似度同源株系，冗余被合并</div>
-    <div class="canvas-wrap" style="height:260px"><canvas id="orgChart"></canvas></div>
-    <div class="insight">
-      <strong>Salmonella enterica</strong>、<strong>E. coli</strong> 等常见模式菌出现频次最高，
-      与其基因组数据库规模庞大、序列重复度高直接相关。
+  <div class="grid-3">
+    <div class="card">
+      <div class="card-title">移除最多的物种 Top 12</div>
+      <div class="card-sub">同物种多株系测序是主要冗余来源</div>
+      <div class="canvas-wrap" style="height:260px"><canvas id="orgChart"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-title">真菌分类群保留率</div>
+      <div class="card-sub">按门级分类的序列保留比例</div>
+      <div class="canvas-wrap" style="height:220px"><canvas id="taxChart"></canvas></div>
+      <div class="insight warn"><strong>子囊菌门(霉菌)</strong>保留率仅 21.4%，冗余最严重；接合菌门与其他类群保留率相对较高。</div>
+    </div>
+  </div>
+
+  <!-- Claude Review -->
+  <div class="card review">
+    <div class="review-header">
+      <div class="review-avatar">C</div>
+      <div>
+        <div class="review-name">Claude · Review</div>
+        <div class="review-meta">FUNGI SOD · CD-HIT 95% DEREPLICATION ANALYSIS</div>
+      </div>
+    </div>
+    <div class="review-block rb-blue">
+      <div class="review-tag">整体效果</div>
+      <p>真菌SOD数据库从 10,106 条压缩至 4,074 条，移除率 59.7%，<b>高于细菌数据集（54.9%）</b>。TSV 完全是 XLSX 的子集，无新增条目，去冗余结果符合预期。真菌更高的冗余率反映了其基因组测序项目中大量近缘株系的重复提交。</p>
+    </div>
+    <div class="review-block rb-amber">
+      <div class="review-tag">长度维度</div>
+      <p>&lt;100aa 全部移除（100%），&gt;250aa 全部移除（100%）。与细菌数据不同，真菌被移除序列的均值（269.2aa）<b>远高于</b>保留序列（204.5aa），标准差也大得多（150.9 vs 34.0），说明真菌数据库中存在大量长前体蛋白和融合序列，被 CD-HIT 识别为非典型代表而淘汰。175–220aa 区间保留率最高，是真菌成熟SOD的核心长度区间。</p>
+    </div>
+    <div class="review-block rb-green">
+      <div class="review-tag">SOD 类型维度</div>
+      <p>真菌 <b>Mn-SOD（50.7%）</b>与 <b>Cu/Zn-SOD（54.4%）</b>保留率接近，与细菌数据（Mn仅27%）形成鲜明对比。这说明真菌Mn-SOD序列多样性显著高于细菌，可能与真菌线粒体Mn-SOD在不同进化分支中的功能分化有关。Cu类型（36.2%）保留率较低，冗余程度高于Mn/Cu/Zn类型。</p>
+    </div>
+    <div class="review-block rb-red">
+      <div class="review-tag">分类群 & 高移除物种</div>
+      <p><b>子囊菌门霉菌</b>（Aspergillus、Colletotrichum等）保留率仅 21.4%，是冗余最严重的类群，与其大规模基因组计划和多株系测序直接相关。<em>Hortaea werneckii</em>（黑酵母）单物种移除最多（78条），因其特殊极端环境适应性被广泛测序。<em>Puccinia graminis</em>（秆锈病菌）同样被大量移除，反映锈菌研究的高强度测序投入。</p>
     </div>
   </div>
 
 </main>
 
 <footer>
-  <div>bacteria_SOD_uniport.xlsx &amp; uniprot_sod_filtered_cdhit95.tsv · CD-HIT 阈值 95%</div>
-  <div>Generated · <span>SOD Dereplication Analysis</span></div>
-  <!-- Claude Review -->
-  <div class="card" style="border-color: rgba(74,160,220,0.25); position: relative; overflow: hidden;">
-    <div style="position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,#60a8f0,#4ade9a);"></div>
-    <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
-      <div style="width:28px;height:28px;border-radius:50%;background:rgba(96,168,240,0.15);border:1px solid rgba(96,168,240,0.3);display:flex;align-items:center;justify-content:center;font-size:12px;color:#60a8f0;font-family:'Syne',sans-serif;font-weight:700;">C</div>
-      <div>
-        <div style="font-family:'Syne',sans-serif;font-size:13px;font-weight:600;color:#60a8f0;">Claude · Review</div>
-        <div style="font-size:10px;color:var(--muted);letter-spacing:0.06em;">AUTOMATED ANALYSIS · bacteria SOD dereplication</div>
-      </div>
-    </div>
-
-    <div style="display:flex;flex-direction:column;gap:12px;">
-
-      <div style="padding:14px 16px;background:var(--bg3);border-radius:8px;border-left:2px solid #60a8f0;">
-        <div style="font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:#60a8f0;margin-bottom:6px;">整体效果</div>
-        <p style="font-size:12px;line-height:1.8;color:var(--text);margin:0;">
-          原始 47,550 条记录经过聚类后保留 21,432 条，移除了 54.9% 的冗余序列。
-          所有 TSV 中的序列都能在 XLSX 中找到，说明 TSV 完全是 XLSX 的子集，符合预期。
-        </p>
-      </div>
-
-      <div style="padding:14px 16px;background:var(--bg3);border-radius:8px;border-left:2px solid var(--accent);">
-        <div style="font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--accent);margin-bottom:6px;">长度维度</div>
-        <p style="font-size:12px;line-height:1.8;color:var(--text);margin:0;">
-          序列长度 &lt;100aa 的条目几乎全部被移除（97.9%），&gt;250aa 的条目也全部被移除（100%）——
-          CD-HIT 对这些极端长度序列的处理非常"激进"，可能是因为这些序列本身就是片段或前体蛋白，
-          与主流长度区间（150–250aa）的代表性序列高度相似。
-          相比之下，220–250aa 的长序列保留率最高（70.4%），说明这个区间的序列多样性更好。
-        </p>
-      </div>
-
-      <div style="padding:14px 16px;background:var(--bg3);border-radius:8px;border-left:2px solid var(--kept);">
-        <div style="font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--kept);margin-bottom:6px;">SOD 类型维度</div>
-        <p style="font-size:12px;line-height:1.8;color:var(--text);margin:0;">
-          Cu/Zn-SOD 的保留率（57%）明显高于 Mn-SOD（27%）和 Fe-SOD（24.5%）。
-          这说明 Mn/Fe-SOD 在细菌中序列高度保守、冗余极大，而 Cu/Zn-SOD 的序列多样性更丰富。
-          对于 CsgA-SOD 融合蛋白设计，如果想要训练数据覆盖更多样的 SOD 序列空间，
-          Fe/Mn-SOD 这部分可能已经被压缩过头了，值得注意。
-        </p>
-      </div>
-
-      <div style="padding:14px 16px;background:var(--bg3);border-radius:8px;border-left:2px solid var(--removed);">
-        <div style="font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--removed);margin-bottom:6px;">高移除物种</div>
-        <p style="font-size:12px;line-height:1.8;color:var(--text);margin:0;">
-          移除集中在 <em>Salmonella</em>、<em>Streptococcus</em>、<em>E. coli</em> 等常见模式菌，
-          说明这些物种的同源株系太多，序列大量重复。
-        </p>
-      </div>
-
-    </div>
-  </div>
+  <div>Fungi_SOD_uniport.xlsx &amp; uniprot_fungi_sod_filtered_cdhit95.tsv · CD-HIT 阈值 95%</div>
+  <div>Generated · <span>Fungi SOD Dereplication Analysis</span></div>
 </footer>
 
 <script>
 // ── Data ──────────────────────────────────────────────────────────────────
-const totalXlsx = 47550, totalTsv = 21432, totalRemoved = 26118;
+const totalXlsx = 10106, totalTsv = 4074, totalRemoved = 6032;
 
 const lenBins = ['<100','100-150','150-175','175-190','190-200','200-210','210-220','220-250','250-300','>300'];
-const lenKept    = [20,1602,2523,2448,5250,6365,1232,1992,0,0];
-const lenRemoved = [933,3475,2385,1343,5635,7265,1190,836,1368,1688];
-const lenRemovalRate = [97.9,68.4,48.6,35.4,51.8,53.3,49.1,29.6,100.0,100.0];
+const lenKept    = [0,189,753,311,260,432,442,1687,0,0];
+const lenRemoved = [128,362,655,137,83,254,158,1068,1901,1205];
+const lenRate    = [100,65.7,46.5,30.6,24.2,37.0,26.3,38.8,100,100];
 
-const sodTypes = ['Unknown','Cu/Zn','Mn','Fe','Mn+Fe','Cu'];
-const sodKept    = [16026,3942,1010,407,21,25];
-const sodRemoved = [19058,2978,2731,1252,79,18];
-const sodRetentionRate = [45.7,57.0,27.0,24.5,21.0,58.1];
-
-const topOrgs = ['Salmonella enterica','Streptococcus mitis','Escherichia coli',
-  'Bacillus cereus','Pseudomonas fluorescens','Streptococcus oralis',
-  'Salmonella enterica I','Streptococcus equinus','Stenotrophomonas maltophilia',
-  'Streptococcus suis','Klebsiella pneumoniae','Helicobacter pylori'];
-const topOrgCounts = [149,141,129,116,113,111,75,73,71,61,55,54];
+const sodTypes = ['Unknown','Mn','Cu/Zn','Cu'];
+const sodRate  = [29.5,50.7,54.4,36.2];
 
 const histLabels = ['80','95','110','125','140','155','170','185','200','215','230','245','260','275','290'];
-const histKept    = [0,144,210,729,704,974,3036,5215,7936,1067,1105,312,0,0,0];
-const histRemoved = [219,325,352,2105,1090,663,2590,5243,8697,773,445,634,269,225,621];
+const histKept    = [0,14,42,61,518,233,247,358,658,735,830,378,0,0,0];
+const histRemoved = [64,43,82,93,722,57,117,133,347,367,541,719,506,444,589];
 
-// ── Chart defaults ─────────────────────────────────────────────────────────
-const gridColor = 'rgba(255,255,255,0.05)';
-const tickColor = '#7a8078';
-const font = { family: "'DM Mono', monospace", size: 10 };
-const baseScales = () => ({
-  x: { grid: { color: gridColor }, ticks: { color: tickColor, font } },
-  y: { grid: { color: gridColor }, ticks: { color: tickColor, font } }
-});
+const topOrgs = ['Hortaea werneckii','Aureobasidium pullulans','Rhizoctonia solani',
+  'Puccinia graminis','Orbilia oligospora','Verticillium longisporum',
+  'Colletotrichum cereale','Aspergillus niger','Friedmanniomyces endolithicus',
+  'Puccinia striiformis','Cryptococcus gattii','Aureobasidium melanogenum'];
+const topOrgCounts = [78,49,48,45,34,27,23,22,22,21,21,20];
+
+const taxGroups = ['Ascomycota\n(霉菌)','Ascomycota\n(酵母)','Basidiomycota','Mucoromycota','Other'];
+const taxRate   = [21.4,45.4,36.9,45.5,46.8];
+
+// ── Chart config ──────────────────────────────────────────────────────────
+const gc = 'rgba(0,0,0,0.06)';
+const tc = '#6b7068';
+const fn = { family: "'DM Mono', monospace", size: 10 };
+const kC = 'rgba(26,143,86,0.65)', rC = 'rgba(196,61,32,0.6)';
+const kB = 'rgba(26,143,86,0.9)',  rB = 'rgba(196,61,32,0.85)';
 
 // 1. Stacked length bar
 new Chart(document.getElementById('lenStack'), {
   type: 'bar',
-  data: {
-    labels: lenBins,
-    datasets: [
-      { label: '保留', data: lenKept, backgroundColor: 'rgba(74,222,154,0.6)', borderColor: 'rgba(74,222,154,0.9)', borderWidth: 0.5 },
-      { label: '移除', data: lenRemoved, backgroundColor: 'rgba(240,100,72,0.5)', borderColor: 'rgba(240,100,72,0.8)', borderWidth: 0.5 }
-    ]
-  },
-  options: {
-    responsive: true, maintainAspectRatio: false,
-    plugins: { legend: { display: false } },
+  data: { labels: lenBins, datasets: [
+    { label: '保留', data: lenKept, backgroundColor: kC, borderColor: kB, borderWidth: 0.5 },
+    { label: '移除', data: lenRemoved, backgroundColor: rC, borderColor: rB, borderWidth: 0.5 }
+  ]},
+  options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } },
     scales: {
-      x: { stacked: true, grid: { color: gridColor }, ticks: { color: tickColor, font, maxRotation: 35, autoSkip: false } },
-      y: { stacked: true, grid: { color: gridColor }, ticks: { color: tickColor, font } }
-    }
-  }
+      x: { stacked: true, grid: { color: gc }, ticks: { color: tc, font: fn, maxRotation: 35, autoSkip: false } },
+      y: { stacked: true, grid: { color: gc }, ticks: { color: tc, font: fn } }
+    }}
 });
 
-// 2. SOD retention rate horizontal
-new Chart(document.getElementById('sodRetention'), {
+// 2. SOD retention horizontal
+new Chart(document.getElementById('sodBar'), {
   type: 'bar',
-  data: {
-    labels: sodTypes,
-    datasets: [{
-      label: '保留率 %',
-      data: sodRetentionRate,
-      backgroundColor: sodRetentionRate.map(v =>
-        v >= 55 ? 'rgba(74,222,154,0.7)' :
-        v >= 40 ? 'rgba(200,240,96,0.6)' :
-        v >= 25 ? 'rgba(240,180,72,0.6)' : 'rgba(240,100,72,0.65)'
-      ),
-      borderRadius: 4,
-      borderSkipped: false,
-    }]
-  },
-  options: {
-    indexAxis: 'y',
-    responsive: true, maintainAspectRatio: false,
-    plugins: { legend: { display: false } },
+  data: { labels: sodTypes, datasets: [{ label: '保留率%', data: sodRate,
+    backgroundColor: sodRate.map(v => v >= 50 ? 'rgba(26,143,86,0.7)' : v >= 35 ? 'rgba(196,172,20,0.65)' : 'rgba(196,61,32,0.65)'),
+    borderRadius: 4, borderSkipped: false }]},
+  options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } },
     scales: {
-      x: { min: 0, max: 70, grid: { color: gridColor }, ticks: { color: tickColor, font, callback: v => v + '%' } },
-      y: { grid: { color: 'transparent' }, ticks: { color: tickColor, font } }
-    }
-  }
+      x: { min: 0, max: 65, grid: { color: gc }, ticks: { color: tc, font: fn, callback: v => v + '%' } },
+      y: { grid: { color: 'transparent' }, ticks: { color: tc, font: fn } }
+    }}
 });
 
-// 3. Removal rate bar (color-coded)
+// 3. Removal rate
 new Chart(document.getElementById('remRate'), {
   type: 'bar',
-  data: {
-    labels: lenBins,
-    datasets: [{
-      label: '移除率 %',
-      data: lenRemovalRate,
-      backgroundColor: lenRemovalRate.map(v =>
-        v >= 90 ? 'rgba(240,100,72,0.85)' :
-        v >= 60 ? 'rgba(240,100,72,0.55)' :
-        v >= 40 ? 'rgba(200,180,60,0.55)' : 'rgba(74,222,154,0.55)'
-      ),
-      borderRadius: 4,
-      borderSkipped: false,
-    }]
-  },
-  options: {
-    responsive: true, maintainAspectRatio: false,
-    plugins: { legend: { display: false } },
+  data: { labels: lenBins, datasets: [{ label: '移除率%', data: lenRate,
+    backgroundColor: lenRate.map(v => v >= 90 ? 'rgba(196,61,32,0.82)' : v >= 50 ? 'rgba(196,61,32,0.52)' : v >= 30 ? 'rgba(196,172,20,0.55)' : 'rgba(26,143,86,0.6)'),
+    borderRadius: 3, borderSkipped: false }]},
+  options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } },
     scales: {
-      x: { grid: { color: gridColor }, ticks: { color: tickColor, font, maxRotation: 35, autoSkip: false } },
-      y: { min: 0, max: 105, grid: { color: gridColor }, ticks: { color: tickColor, font, callback: v => v + '%' } }
-    }
-  }
+      x: { grid: { color: gc }, ticks: { color: tc, font: fn, maxRotation: 35, autoSkip: false } },
+      y: { min: 0, max: 110, grid: { color: gc }, ticks: { color: tc, font: fn, callback: v => v + '%' } }
+    }}
 });
 
 // 4. Histogram
-new Chart(document.getElementById('histChart'), {
+new Chart(document.getElementById('hist'), {
   type: 'bar',
-  data: {
-    labels: histLabels,
-    datasets: [
-      { label: '保留', data: histKept, backgroundColor: 'rgba(74,222,154,0.45)', borderColor: 'rgba(74,222,154,0.7)', borderWidth: 0.5 },
-      { label: '移除', data: histRemoved, backgroundColor: 'rgba(240,100,72,0.35)', borderColor: 'rgba(240,100,72,0.6)', borderWidth: 0.5 }
-    ]
-  },
-  options: {
-    responsive: true, maintainAspectRatio: false,
-    plugins: { legend: { display: false } },
+  data: { labels: histLabels, datasets: [
+    { label: '保留', data: histKept, backgroundColor: 'rgba(26,143,86,0.45)', borderColor: kB, borderWidth: 0.5 },
+    { label: '移除', data: histRemoved, backgroundColor: 'rgba(196,61,32,0.38)', borderColor: rB, borderWidth: 0.5 }
+  ]},
+  options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } },
     scales: {
-      x: { grid: { color: gridColor }, ticks: { color: tickColor, font },
-           title: { display: true, text: '序列长度 (aa)', color: tickColor, font } },
-      y: { grid: { color: gridColor }, ticks: { color: tickColor, font } }
-    }
-  }
+      x: { grid: { color: gc }, ticks: { color: tc, font: fn }, title: { display: true, text: '序列长度 (aa)', color: tc, font: fn } },
+      y: { grid: { color: gc }, ticks: { color: tc, font: fn } }
+    }}
 });
 
-// 5. Organisms horizontal bar
+// 5. Top organisms
 new Chart(document.getElementById('orgChart'), {
   type: 'bar',
-  data: {
-    labels: topOrgs,
-    datasets: [{
-      label: '被移除条目数',
-      data: topOrgCounts,
-      backgroundColor: 'rgba(240,100,72,0.5)',
-      borderColor: 'rgba(240,100,72,0.8)',
-      borderWidth: 0.5,
-      borderRadius: 3,
-      borderSkipped: false,
-    }]
-  },
-  options: {
-    indexAxis: 'y',
-    responsive: true, maintainAspectRatio: false,
-    plugins: { legend: { display: false } },
+  data: { labels: topOrgs, datasets: [{ label: '移除条目', data: topOrgCounts,
+    backgroundColor: rC, borderColor: rB, borderWidth: 0.5, borderRadius: 3, borderSkipped: false }]},
+  options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } },
     scales: {
-      x: { grid: { color: gridColor }, ticks: { color: tickColor, font } },
-      y: { grid: { color: 'transparent' }, ticks: { color: tickColor, font: { ...font, size: 10 } } }
-    }
-  }
+      x: { grid: { color: gc }, ticks: { color: tc, font: fn } },
+      y: { grid: { color: 'transparent' }, ticks: { color: tc, font: { ...fn, size: 9 } } }
+    }}
+});
+
+// 6. Taxonomic group
+new Chart(document.getElementById('taxChart'), {
+  type: 'bar',
+  data: { labels: taxGroups, datasets: [{ label: '保留率%', data: taxRate,
+    backgroundColor: taxRate.map(v => v >= 45 ? 'rgba(26,143,86,0.7)' : v >= 35 ? 'rgba(196,172,20,0.65)' : 'rgba(196,61,32,0.65)'),
+    borderRadius: 5, borderSkipped: false }]},
+  options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } },
+    scales: {
+      x: { grid: { color: gc }, ticks: { color: tc, font: fn } },
+      y: { min: 0, max: 60, grid: { color: gc }, ticks: { color: tc, font: fn, callback: v => v + '%' } }
+    }}
 });
 </script>
 </body>
