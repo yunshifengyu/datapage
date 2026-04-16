@@ -64,6 +64,7 @@
       width: 100%;
       height: 100%;
       display: block;
+      touch-action: none;
     }
 
     /* --- Floating search --- */
@@ -564,6 +565,7 @@
     let currentZoom = null;
     let currentRoot = null;
     let currentSimulation = null;
+    let currentLayoutMetrics = null;
     let printLabelState = null;
     const NODE_BY_ID = new Map(DATA.nodes.map(node => [node.id, node]));
     const AUTHOR_TO_PAPERS = new Map();
@@ -1293,6 +1295,63 @@
       return targets;
     }
 
+    function isCompactMobileViewport() {
+      return window.matchMedia("(max-width: 700px)").matches;
+    }
+
+    function computeLayoutMetrics(viewportWidth, viewportHeight) {
+      const mobile = isCompactMobileViewport();
+      const layoutWidth = mobile ? Math.max(1200, viewportWidth * 2.2) : viewportWidth;
+      const layoutHeight = mobile ? Math.max(960, viewportHeight * 2.0) : viewportHeight;
+      const cx = layoutWidth / 2;
+      const cy = layoutHeight / 2;
+      const minScale = mobile ? 0.18 : 0.1;
+      const maxScale = mobile ? 4.5 : 5;
+      const defaultScale = mobile
+        ? Math.max(
+            0.34,
+            Math.min(
+              0.72,
+              Math.min(viewportWidth / layoutWidth, viewportHeight / layoutHeight) * 1.25
+            )
+          )
+        : 1;
+      const defaultTransform = d3.zoomIdentity
+        .translate(
+          (viewportWidth / 2) - (cx * defaultScale),
+          (viewportHeight / 2) - (cy * defaultScale),
+        )
+        .scale(defaultScale);
+      const translatePadX = mobile ? Math.max(260, layoutWidth * 0.18) : Math.max(160, layoutWidth * 0.08);
+      const translatePadY = mobile ? Math.max(260, layoutHeight * 0.18) : Math.max(160, layoutHeight * 0.08);
+      return {
+        mobile,
+        viewportWidth,
+        viewportHeight,
+        layoutWidth,
+        layoutHeight,
+        cx,
+        cy,
+        minScale,
+        maxScale,
+        defaultScale,
+        defaultTransform,
+        translateExtent: [
+          [-translatePadX, -translatePadY],
+          [layoutWidth + translatePadX, layoutHeight + translatePadY],
+        ],
+      };
+    }
+
+    function applyDefaultViewport(duration = 0) {
+      if (!currentSvg || !currentZoom || !currentLayoutMetrics?.defaultTransform) return;
+      if (duration > 0) {
+        currentSvg.transition().duration(duration).call(currentZoom.transform, currentLayoutMetrics.defaultTransform);
+      } else {
+        currentSvg.call(currentZoom.transform, currentLayoutMetrics.defaultTransform);
+      }
+    }
+
     function fitGraphToViewport(duration = 0, padding = 36) {
       if (!currentSvg || !currentZoom || !currentRoot) return;
       const rootNode = currentRoot.node();
@@ -1325,11 +1384,17 @@
     function render(options = {}) {
       const width = graphEl.clientWidth || window.innerWidth;
       const height = graphEl.clientHeight || window.innerHeight;
+      const layoutMetrics = computeLayoutMetrics(width, height);
+      currentLayoutMetrics = layoutMetrics;
       const svg = d3.select(graphEl);
       svg.selectAll("*").remove();
       const root = svg.append("g");
       currentRoot = root;
-      const zoom = d3.zoom().scaleExtent([0.1, 5]).on("zoom", (event) => {
+      const zoom = d3.zoom()
+        .scaleExtent([layoutMetrics.minScale, layoutMetrics.maxScale])
+        .extent([[0, 0], [width, height]])
+        .translateExtent(layoutMetrics.translateExtent)
+        .on("zoom", (event) => {
         root.attr("transform", event.transform);
         state.lastTransform = event.transform;
         state.zoomK = event.transform.k;
@@ -1344,8 +1409,8 @@
       currentZoom = zoom;
 
       const view = computeVisibleGraph();
-      const cx = width / 2, cy = height / 2;
-      const authorScatterTargets = computeAuthorScatterTargets(width, height, cx, cy);
+      const cx = layoutMetrics.cx, cy = layoutMetrics.cy;
+      const authorScatterTargets = computeAuthorScatterTargets(layoutMetrics.layoutWidth, layoutMetrics.layoutHeight, cx, cy);
       const radialTargets = computeRadialTargets(view, authorScatterTargets, cx, cy);
       const shadowHints = buildShadowHints(view, authorScatterTargets, cx, cy);
       const needsSimulation = shouldRunSimulation(view);
@@ -1579,7 +1644,7 @@
         });
       }
 
-      const nextTransform = options.preserveTransform || state.lastTransform || d3.zoomIdentity.scale(state.zoomK || 1);
+      const nextTransform = options.preserveTransform || state.lastTransform || layoutMetrics.defaultTransform || d3.zoomIdentity.scale(state.zoomK || 1);
       state.applyingTransform = true;
       svg.call(zoom.transform, nextTransform);
       state.applyingTransform = false;
@@ -1597,7 +1662,8 @@
     });
     document.getElementById("resetViewBtn").addEventListener("click", () => {
       if (currentSvg && currentZoom) {
-        currentSvg.transition().duration(250).call(currentZoom.transform, d3.zoomIdentity);
+        const resetTransform = currentLayoutMetrics?.defaultTransform || d3.zoomIdentity;
+        currentSvg.transition().duration(250).call(currentZoom.transform, resetTransform);
       }
     });
     document.getElementById("presentationModeBtn").addEventListener("click", () => {
@@ -1630,8 +1696,14 @@
 
     // --- Init ---
     render();
-    requestAnimationFrame(() => fitGraphToViewport(0, 40));
-    window.addEventListener("resize", render);
+    requestAnimationFrame(() => {
+      if (isCompactMobileViewport()) {
+        applyDefaultViewport(0);
+      } else {
+        fitGraphToViewport(0, 40);
+      }
+    });
+    window.addEventListener("resize", () => render({ preserveTransform: state.lastTransform }));
   </script>
 </body>
 </html>
