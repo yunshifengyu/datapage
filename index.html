@@ -661,6 +661,8 @@
       lastTransform: null,
       pendingZoomFrame: null,
       applyingTransform: false,
+      zoomGestureActive: false,
+      deferredZoomTransform: null,
       pinnedPositions: new Map(),
       presentationMode: false,
       renderedNodePositions: new Map(),
@@ -815,11 +817,22 @@
     }
 
     function scheduleZoomRerender(transform) {
+      if (currentLayoutMetrics?.mobile && state.zoomGestureActive) {
+        state.deferredZoomTransform = transform;
+        return;
+      }
       if (state.pendingZoomFrame !== null) return;
       state.pendingZoomFrame = window.requestAnimationFrame(() => {
         state.pendingZoomFrame = null;
         render({ preserveTransform: transform });
       });
+    }
+
+    function flushDeferredZoomRerender() {
+      if (!state.deferredZoomTransform) return;
+      const nextTransform = state.deferredZoomTransform;
+      state.deferredZoomTransform = null;
+      scheduleZoomRerender(nextTransform);
     }
 
     function isExpandedAuthorPaperEdge(edge, expandedAuthorId, expandedPaperIds) {
@@ -1573,6 +1586,11 @@
         .scaleExtent([layoutMetrics.minScale, layoutMetrics.maxScale])
         .extent([[0, 0], [width, height]])
         .translateExtent(layoutMetrics.translateExtent)
+        .on("start", (event) => {
+          const sourceType = event.sourceEvent?.type || "";
+          const isTouchGesture = sourceType.startsWith("touch") || sourceType === "pointermove" || currentLayoutMetrics?.mobile;
+          state.zoomGestureActive = Boolean(currentLayoutMetrics?.mobile && isTouchGesture);
+        })
         .on("zoom", (event) => {
         root.attr("transform", event.transform);
         state.lastTransform = event.transform;
@@ -1582,6 +1600,13 @@
           state.displayProfileKey = nextProfile.key;
           scheduleZoomRerender(event.transform);
         }
+      })
+        .on("end", () => {
+          const wasGestureActive = state.zoomGestureActive;
+          state.zoomGestureActive = false;
+          if (wasGestureActive) {
+            flushDeferredZoomRerender();
+          }
       });
       svg.call(zoom);
       svg.on("dblclick.zoom", null);
