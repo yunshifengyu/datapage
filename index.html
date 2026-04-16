@@ -1,331 +1,908 @@
-<!DOCTYPE html>
-<html lang="zh">
+<!doctype html>
+<html lang="zh-CN">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Fungi SOD Database · CD-HIT 95% Dereplication Analysis</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
-<style>
-  :root {
-    --bg:       #f5f5f2;
-    --bg2:      #ffffff;
-    --bg3:      #eeede9;
-    --border:   rgba(0,0,0,0.08);
-    --border2:  rgba(0,0,0,0.16);
-    --text:     #1a1c19;
-    --muted:    #6b7068;
-    --kept:     #1a8f56;
-    --removed:  #c43d20;
-    --accent:   #4a7c10;
-    --blue:     #1a6fab;
-    --amber:    #c47020;
-    --card-r:   10px;
-  }
-  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-  body { background: var(--bg); color: var(--text); font-family: 'DM Mono', monospace; font-size: 13px; line-height: 1.6; min-height: 100vh; }
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>吴立德 - Scholar Graph</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
+  <style>
+    :root {
+      --bg: #f3ede3;
+      --panel: rgba(255, 251, 245, 0.96);
+      --ink: #203040;
+      --muted: #6b7b8c;
+      --line: #d8cbb9;
+      --accent: #b46a2c;
+      --shadow: 0 14px 42px rgba(27, 39, 51, 0.12);
+      --grid-line: rgba(148, 163, 184, 0.08);
+      --glow-a: rgba(224, 164, 88, 0.16);
+      --glow-b: rgba(76, 120, 168, 0.12);
+      --body-start: #f8f3eb;
+      --body-end: #efe4d5;
+      --card-bg: rgba(255,255,255,0.78);
+      --mentor-color: #C65D21;
+      --author-color: #4C78A8;
+      --paper-color: #2A9D8F;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at top left, var(--glow-a), transparent 30%),
+        radial-gradient(circle at bottom right, var(--glow-b), transparent 28%),
+        linear-gradient(180deg, var(--body-start), var(--body-end));
+      overflow: hidden;
+      height: 100vh;
+    }
+    .app {
+      position: relative;
+      width: 100%;
+      height: 100vh;
+    }
+    body.presentation-mode .float-search,
+    body.presentation-mode .float-legend,
+    body.presentation-mode .float-controls,
+    body.presentation-mode .inspector {
+      display: none !important;
+    }
+    body.presentation-mode .canvas-wrap {
+      background-image: none;
+    }
+    .canvas-wrap {
+      width: 100%;
+      height: 100%;
+      background-image:
+        linear-gradient(var(--grid-line) 1px, transparent 1px),
+        linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+      background-size: 24px 24px;
+    }
+    .graph-svg {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
 
-  header { padding: 48px 48px 32px; border-bottom: 1px solid var(--border); display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; flex-wrap: wrap; }
-  .eyebrow { font-size: 11px; letter-spacing: 0.12em; color: var(--accent); text-transform: uppercase; margin-bottom: 10px; }
-  h1 { font-family: 'Syne', sans-serif; font-size: clamp(26px, 3.5vw, 42px); font-weight: 800; line-height: 1.05; letter-spacing: -0.02em; }
-  h1 span { color: var(--kept); }
-  .subtitle { margin-top: 10px; color: var(--muted); font-size: 12px; max-width: 480px; line-height: 1.6; }
-  .header-meta { display: flex; gap: 28px; align-items: center; }
-  .meta-item { text-align: right; }
-  .meta-num { font-family: 'Syne', sans-serif; font-size: 26px; font-weight: 700; display: block; line-height: 1; }
-  .meta-label { font-size: 10px; color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase; margin-top: 4px; }
-  .sep { width: 1px; height: 36px; background: var(--border); }
+    /* --- Floating search --- */
+    .float-search {
+      position: absolute;
+      top: 16px;
+      left: 16px;
+      z-index: 10;
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    .float-search input {
+      width: 280px;
+      padding: 10px 14px;
+      border-radius: 12px;
+      border: 1px solid var(--line);
+      background: var(--panel);
+      backdrop-filter: blur(12px);
+      font-size: 14px;
+      font-family: 'Inter', system-ui, sans-serif;
+      color: var(--ink);
+      box-shadow: var(--shadow);
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .float-search input:focus {
+      border-color: var(--accent);
+    }
+    .float-search input::placeholder {
+      color: var(--muted);
+    }
 
-  main { padding: 32px 48px 60px; display: flex; flex-direction: column; gap: 16px; max-width: 1400px; }
+    /* --- Floating legend --- */
+    .float-legend {
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      z-index: 10;
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      background: var(--panel);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(148,163,184,0.15);
+      border-radius: 14px;
+      padding: 10px 14px;
+      box-shadow: var(--shadow);
+      transition: opacity 0.3s, transform 0.3s;
+    }
+    .float-legend.hidden {
+      opacity: 0;
+      pointer-events: none;
+      transform: translateY(-8px);
+    }
+    .legend-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--ink);
+      white-space: nowrap;
+    }
+    .legend-swatch {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      display: inline-block;
+      flex-shrink: 0;
+    }
 
-  .metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
-  .metric { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--card-r); padding: 18px 20px; position: relative; overflow: hidden; }
-  .metric::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px; border-radius: 2px 2px 0 0; }
-  .metric.kept::before  { background: var(--kept); }
-  .metric.rem::before   { background: var(--removed); }
-  .metric.amb::before   { background: var(--amber); }
-  .metric.blu::before   { background: var(--blue); }
-  .metric-label { font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
-  .metric-val { font-family: 'Syne', sans-serif; font-size: 30px; font-weight: 700; line-height: 1; }
-  .metric.kept .metric-val { color: var(--kept); }
-  .metric.rem  .metric-val { color: var(--removed); }
-  .metric.amb  .metric-val { color: var(--amber); }
-  .metric.blu  .metric-val { color: var(--blue); }
-  .metric-sub { font-size: 11px; color: var(--muted); margin-top: 5px; }
+    /* --- Floating controls --- */
+    .float-controls {
+      position: absolute;
+      bottom: 16px;
+      left: 16px;
+      z-index: 10;
+      display: flex;
+      gap: 8px;
+    }
+    .ctrl-btn {
+      border: 1px solid rgba(148,163,184,0.25);
+      background: var(--panel);
+      backdrop-filter: blur(12px);
+      border-radius: 10px;
+      padding: 8px 14px;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--ink);
+      font-family: 'Inter', system-ui, sans-serif;
+      cursor: pointer;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+      transition: all 0.2s;
+    }
+    .ctrl-btn:hover {
+      border-color: rgba(180, 83, 9, 0.35);
+      color: #9a3412;
+      transform: translateY(-1px);
+      box-shadow: 0 6px 16px rgba(0,0,0,0.12);
+    }
 
-  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-  .grid-3 { display: grid; grid-template-columns: 3fr 2fr; gap: 14px; }
+    /* --- Inspector panel (right, hidden by default) --- */
+    .inspector {
+      position: absolute;
+      top: 0;
+      right: 0;
+      width: 380px;
+      height: 100%;
+      background: var(--panel);
+      backdrop-filter: blur(14px);
+      border-left: 1px solid rgba(148,163,184,0.15);
+      box-shadow: -8px 0 32px rgba(27,39,51,0.10);
+      z-index: 20;
+      overflow-y: auto;
+      padding: 24px 20px;
+      transform: translateX(100%);
+      transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .inspector.open {
+      transform: translateX(0);
+    }
+    .inspector-close {
+      position: absolute;
+      top: 14px;
+      right: 14px;
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      border: 1px solid rgba(148,163,184,0.2);
+      background: rgba(255,255,255,0.8);
+      font-size: 16px;
+      color: var(--muted);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s;
+    }
+    .inspector-close:hover {
+      background: rgba(255,255,255,1);
+      color: var(--ink);
+      border-color: rgba(148,163,184,0.4);
+    }
+    .inspector h2 {
+      font-size: 18px;
+      font-weight: 700;
+      margin: 0 0 6px;
+      line-height: 1.3;
+      padding-right: 40px;
+    }
+    .inspector-subtitle {
+      color: var(--muted);
+      font-size: 13px;
+      margin-bottom: 16px;
+    }
+    .kind-badge {
+      display: inline-block;
+      padding: 2px 10px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 600;
+      color: #fff;
+      margin-right: 8px;
+      vertical-align: middle;
+    }
+    .section-label {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+      font-weight: 600;
+      margin: 18px 0 8px;
+    }
+    .detail-block {
+      padding: 12px;
+      border-radius: 12px;
+      background: var(--card-bg);
+      border: 1px solid rgba(148,163,184,0.15);
+      margin-bottom: 12px;
+      font-size: 13px;
+      line-height: 1.6;
+    }
+    .detail-toggle {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      cursor: pointer;
+      padding: 8px 12px;
+      border-radius: 10px;
+      background: rgba(255,255,255,0.6);
+      border: 1px solid rgba(148,163,184,0.15);
+      font-size: 13px;
+      color: var(--muted);
+      margin-bottom: 8px;
+      user-select: none;
+      transition: background 0.15s;
+    }
+    .detail-toggle:hover {
+      background: rgba(255,255,255,0.85);
+      color: var(--ink);
+    }
+    .detail-toggle-content {
+      display: none;
+      margin-bottom: 12px;
+    }
+    .detail-toggle-content.open {
+      display: block;
+    }
+    .conn-group-title {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+      font-weight: 600;
+      margin: 14px 0 6px;
+    }
+    .conn-item {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      padding: 8px 10px;
+      border-radius: 10px;
+      background: rgba(255,255,255,0.6);
+      border: 1px solid rgba(148,163,184,0.12);
+      margin-bottom: 6px;
+      cursor: pointer;
+      transition: all 0.15s;
+      font-size: 13px;
+    }
+    .conn-item:hover {
+      background: rgba(255,255,255,0.95);
+      border-color: rgba(148,163,184,0.3);
+      transform: translateX(2px);
+    }
+    .conn-item-header {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+    .conn-arrow {
+      font-size: 12px;
+      color: var(--muted);
+      flex-shrink: 0;
+    }
+    .conn-target {
+      font-weight: 600;
+      color: var(--ink);
+      word-break: break-word;
+    }
+    .rel-badge {
+      display: inline-block;
+      padding: 1px 7px;
+      border-radius: 999px;
+      font-size: 10px;
+      font-weight: 600;
+      white-space: nowrap;
+      color: #fff;
+    }
+    .conn-meta {
+      font-size: 11px;
+      color: var(--muted);
+      padding-left: 20px;
+    }
 
-  .card { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--card-r); padding: 20px 22px; }
-  .card-title { font-family: 'Syne', sans-serif; font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 3px; }
-  .card-sub { font-size: 11px; color: var(--muted); margin-bottom: 14px; line-height: 1.5; }
-  .canvas-wrap { position: relative; width: 100%; }
-  .legend { display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 10px; }
-  .legend-item { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--muted); }
-  .legend-dot { width: 9px; height: 9px; border-radius: 2px; flex-shrink: 0; }
+    /* --- Node styles in SVG --- */
+    .node-label {
+      font-family: 'Inter', system-ui, sans-serif;
+      fill: #334155;
+      pointer-events: none;
+      font-weight: 600;
+    }
+    .node-label-mentor {
+      font-size: 18px;
+      font-weight: 700;
+    }
+    .node-label-author {
+      font-size: 15px;
+      font-weight: 600;
+    }
+    .node-label-paper {
+      font-size: 10px;
+      font-weight: 500;
+      fill: #475569;
+    }
+    .edge-label {
+      font-family: 'Inter', system-ui, sans-serif;
+      font-size: 9px;
+      fill: #475569;
+      pointer-events: none;
+    }
+    .layer-ring {
+      fill: none;
+      stroke: rgba(148,163,184,0.18);
+      stroke-dasharray: 4 6;
+    }
+    .layer-ring-label {
+      font-family: 'Inter', system-ui, sans-serif;
+      font-size: 10px;
+      fill: #94a3b8;
+      font-weight: 500;
+    }
 
-  .insight { margin-top: 10px; padding: 10px 14px; background: var(--bg3); border-left: 2px solid var(--kept); border-radius: 0 6px 6px 0; font-size: 11px; color: var(--muted); line-height: 1.7; }
-  .insight strong { font-weight: 500; }
-  .insight.warn { border-left-color: var(--amber); }
-  .insight.info { border-left-color: var(--blue); }
-  .insight.warn strong { color: var(--amber); }
-  .insight.info strong { color: var(--blue); }
-  .insight strong { color: var(--kept); }
-
-  .funnel { display: flex; height: 48px; border-radius: 8px; overflow: hidden; margin-bottom: 12px; }
-  .funnel-kept { display: flex; align-items: center; justify-content: center; font-family: 'Syne', sans-serif; font-size: 12px; font-weight: 600; color: var(--kept); background: rgba(26,143,86,0.12); border-right: 1px solid rgba(26,143,86,0.25); width: 40.3%; }
-  .funnel-removed { flex: 1; display: flex; align-items: center; justify-content: center; font-family: 'Syne', sans-serif; font-size: 12px; font-weight: 600; color: var(--removed); background: rgba(196,61,32,0.09); }
-
-  /* Claude Review */
-  .review { border-color: rgba(26,107,171,0.2); position: relative; overflow: hidden; }
-  .review::after { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px; background: linear-gradient(90deg, var(--blue), var(--kept)); }
-  .review-header { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
-  .review-avatar { width: 26px; height: 26px; border-radius: 50%; background: rgba(26,107,171,0.08); border: 0.5px solid rgba(26,107,171,0.25); display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; color: var(--blue); font-family: 'Syne', sans-serif; }
-  .review-name { font-family: 'Syne', sans-serif; font-size: 13px; font-weight: 600; color: var(--blue); }
-  .review-meta { font-size: 10px; color: var(--muted); letter-spacing: 0.06em; }
-  .review-block { padding: 12px 14px; background: var(--bg3); border-radius: 8px; margin-bottom: 10px; }
-  .review-block:last-child { margin-bottom: 0; }
-  .review-tag { font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 5px; font-weight: 500; }
-  .review-block p { font-size: 12px; line-height: 1.8; color: var(--text); margin: 0; }
-  .rb-blue   { border-left: 2px solid var(--blue);    } .rb-blue   .review-tag { color: var(--blue); }
-  .rb-amber  { border-left: 2px solid var(--amber);   } .rb-amber  .review-tag { color: var(--amber); }
-  .rb-green  { border-left: 2px solid var(--kept);    } .rb-green  .review-tag { color: var(--kept); }
-  .rb-red    { border-left: 2px solid var(--removed); } .rb-red    .review-tag { color: var(--removed); }
-
-  footer { padding: 18px 48px; border-top: 1px solid var(--border); font-size: 11px; color: var(--muted); display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
-  footer span { color: var(--accent); }
-</style>
+    @media (max-width: 700px) {
+      .inspector { width: 100%; }
+      .float-search input { width: 200px; }
+    }
+  </style>
 </head>
 <body>
-
-<header>
-  <div>
-    <p class="eyebrow">Bioinformatics · Sequence Analysis · Fungi</p>
-    <h1>fungi SOD<br><span>dereplication</span> report</h1>
-    <p class="subtitle">UniProt真菌超氧化物歧化酶数据库经CD-HIT（阈值95%）去冗余前后对比分析 — 序列多样性、长度分布、SOD类型与分类群保留特征</p>
-  </div>
-  <div class="header-meta">
-    <div class="meta-item"><span class="meta-num" style="color:var(--kept)">4,074</span><div class="meta-label">保留 · TSV</div></div>
-    <div class="sep"></div>
-    <div class="meta-item"><span class="meta-num" style="color:var(--removed)">6,032</span><div class="meta-label">移除 · XLSX</div></div>
-    <div class="sep"></div>
-    <div class="meta-item"><span class="meta-num" style="color:var(--blue)">10,106</span><div class="meta-label">原始总量</div></div>
-  </div>
-</header>
-
-<main>
-
-  <div class="metrics">
-    <div class="metric blu"><div class="metric-label">原始数据库</div><div class="metric-val">10,106</div><div class="metric-sub">真菌SOD蛋白条目</div></div>
-    <div class="metric kept"><div class="metric-label">CD-HIT 95% 保留</div><div class="metric-val">4,074</div><div class="metric-sub">非冗余代表序列</div></div>
-    <div class="metric rem"><div class="metric-label">移除冗余</div><div class="metric-val">6,032</div><div class="metric-sub">相似度 ≥95% 合并</div></div>
-    <div class="metric amb"><div class="metric-label">压缩比</div><div class="metric-val">59.7%</div><div class="metric-sub">高于细菌数据集54.9%</div></div>
-  </div>
-
-  <div class="card">
-    <div class="card-title">数据集压缩概览</div>
-    <div class="card-sub">真菌SOD原始 10,106 → 保留 4,074，压缩率高于细菌数据集（54.9%）</div>
-    <div class="funnel">
-      <div class="funnel-kept">40.3% kept</div>
-      <div class="funnel-removed">59.7% removed</div>
+  <div class="app">
+    <div class="canvas-wrap">
+      <svg class="graph-svg" id="graph"></svg>
     </div>
-    <div class="insight info"><strong>vs 细菌数据集：</strong>真菌数据压缩率（59.7%）更高，说明真菌SOD序列冗余程度更严重，单物种多株系测序数据贡献了大量高相似序列。</div>
-  </div>
 
-  <div class="grid-2">
-    <div class="card">
-      <div class="card-title">序列长度分布（堆叠）</div>
-      <div class="card-sub">各长度区间保留 vs 移除数量</div>
-      <div class="legend">
-        <div class="legend-item"><span class="legend-dot" style="background:rgba(26,143,86,0.7)"></span>保留</div>
-        <div class="legend-item"><span class="legend-dot" style="background:rgba(196,61,32,0.65)"></span>移除</div>
-      </div>
-      <div class="canvas-wrap" style="height:220px"><canvas id="lenStack"></canvas></div>
+    <div class="float-search">
+      <input id="searchInput" type="text" placeholder="Search author or paper…">
     </div>
-    <div class="card">
-      <div class="card-title">SOD 类型保留率</div>
-      <div class="card-sub">各 cofactor 类型保留百分比</div>
-      <div class="canvas-wrap" style="height:200px"><canvas id="sodBar"></canvas></div>
-      <div class="insight"><strong>Mn-SOD</strong>（50.7%）与 <strong>Cu/Zn-SOD</strong>（54.4%）保留率接近，与细菌数据差异显著——真菌Mn-SOD多样性远高于细菌。</div>
+
+    <div class="float-legend" id="floatLegend">
+      <span class="legend-item"><span class="legend-swatch" style="background:#C65D21"></span>Mentor</span>
+      <span class="legend-item"><span class="legend-swatch" style="background:#4C78A8"></span>Author</span>
+      <span class="legend-item"><span class="legend-swatch" style="background:#2A9D8F"></span>Paper</span>
+      <span class="legend-item"><span class="legend-swatch" style="background:#61758A;border-radius:2px;width:16px;height:3px"></span>Authored</span>
+    </div>
+
+    <div class="float-controls">
+      <button class="ctrl-btn" id="resetViewBtn">Reset View</button>
+      <button class="ctrl-btn" id="reheatBtn">Reheat</button>
+      <button class="ctrl-btn" id="toggleLabelsBtn">Labels: On</button>
+      <button class="ctrl-btn" id="presentationModeBtn">Presentation View</button>
+    </div>
+
+    <div class="inspector" id="inspector">
+      <button class="inspector-close" id="inspectorClose" title="Close">✕</button>
+      <div id="inspectorContent"></div>
     </div>
   </div>
 
-  <div class="grid-2">
-    <div class="card">
-      <div class="card-title">各长度区间移除率</div>
-      <div class="card-sub">&lt;100aa 与 &gt;250aa 全部移除；175–220aa 保留率最高</div>
-      <div class="canvas-wrap" style="height:220px"><canvas id="remRate"></canvas></div>
-    </div>
-    <div class="card">
-      <div class="card-title">序列长度连续分布</div>
-      <div class="card-sub">组距 15aa · 保留均值 204.5aa，移除均值 269.2aa</div>
-      <div class="legend">
-        <div class="legend-item"><span class="legend-dot" style="background:rgba(26,143,86,0.6)"></span>保留</div>
-        <div class="legend-item"><span class="legend-dot" style="background:rgba(196,61,32,0.55)"></span>移除</div>
-      </div>
-      <div class="canvas-wrap" style="height:205px"><canvas id="hist"></canvas></div>
-    </div>
-  </div>
+  <script>
+    const DATA = {"nodes": [{"id": "author-4", "kind": "mentor", "title": "吴立德", "shortTitle": "吴立德", "subtitle": "复旦大学 · 计算与智能创新学院终身教授", "detailBody": "出生年份: 1936", "properties": {"name": "吴立德", "title": "计算与智能创新学院终身教授", "affiliation": "复旦大学", "birthYear": 1936, "photo": null}}, {"id": "paper-conf-cikm-ZhouZHW13", "kind": "paper", "title": "A pattern-based selective recrawling approach for object-level vertical search", "shortTitle": "A pattern-based selective recrawling approach for objec…", "subtitle": "CIKM · 2013", "detailBody": "No abstract available.", "year": 2013, "properties": {"title": "A pattern-based selective recrawling approach for object-level vertical search", "year": 2013, "venue": "CIKM", "coAuthors": ["author-yaqianzhou", "author-qizhang", "author-xuanjinghuang"]}}, {"id": "paper-conf-emnlp-WuZHW11", "kind": "paper", "title": "Structural Opinion Mining for Graph-based Sentiment Representation", "shortTitle": "Structural Opinion Mining for Graph-based Sentiment Rep…", "subtitle": "EMNLP · 2011", "detailBody": "Yuanbin Wu, Qi Zhang, Xuanjing Huang, Lide Wu. Proceedings of the 2011 Conference on Empirical Methods in Natural Language Processing. 2011.", "year": 2011, "properties": {"title": "Structural Opinion Mining for Graph-based Sentiment Representation", "year": 2011, "venue": "EMNLP", "coAuthors": ["author-yuanbinwu", "author-qizhang", "author-xuanjinghuang"]}}, {"id": "paper-conf-coling-QianZHW10", "kind": "paper", "title": "2D Trie for Fast Parsing", "shortTitle": "2D Trie for Fast Parsing", "subtitle": "COLING · 2010", "detailBody": "Xian Qian, Qi Zhang, Xuanjing Huang, Lide Wu. Proceedings of the 23rd International Conference on Computational Linguistics (Coling 2010). 2010.", "year": 2010, "properties": {"title": "2D Trie for Fast Parsing", "year": 2010, "venue": "COLING", "coAuthors": ["author-xianqian", "author-qizhang", "author-xuanjinghuang"]}}, {"id": "paper-conf-emnlp-QianZZHW10", "kind": "paper", "title": "Joint Training and Decoding Using Virtual Nodes for Cascaded Segmentation and Tagging Tasks", "shortTitle": "Joint Training and Decoding Using Virtual Nodes for Cas…", "subtitle": "EMNLP · 2010", "detailBody": "Xian Qian, Qi Zhang, Yaqian Zhou, Xuanjing Huang, Lide Wu. Proceedings of the 2010 Conference on Empirical Methods in Natural Language Processing. 2010.", "year": 2010, "properties": {"title": "Joint Training and Decoding Using Virtual Nodes for Cascaded Segmentation and Tagging Tasks", "year": 2010, "venue": "EMNLP", "coAuthors": ["author-xianqian", "author-qizhang", "author-yaqianzhou", "author-xuanjinghuang"]}}, {"id": "paper-conf-www-ZhouJZHW10", "kind": "paper", "title": "Selective recrawling for object-level vertical search", "shortTitle": "Selective recrawling for object-level vertical search", "subtitle": "WWW · 2010", "detailBody": "No abstract available.", "year": 2010, "properties": {"title": "Selective recrawling for object-level vertical search", "year": 2010, "venue": "WWW", "coAuthors": ["author-yaqianzhou", "author-mengjingjiang", "author-qizhang", "author-xuanjinghuang"]}}, {"id": "paper-conf-icmcs-QiuMW09", "kind": "paper", "title": "Face recognition with info-margin maximization", "shortTitle": "Face recognition with info-margin maximization", "subtitle": "ICME · 2009", "detailBody": "We propose face recognition method with info-margin maximization (InfoMargin) from information theoretic viewpoint. It aims to achieve a low generalization error by maximizing the information divergence between the distributions of different classes while minimizing the entropy of the distribution in each single class. Experimental results show that our method outperforms the traditional face recognition methods.", "year": 2009, "properties": {"title": "Face recognition with info-margin maximization", "year": 2009, "venue": "ICME", "coAuthors": ["author-xipengqiu", "author-youdongmiao"]}}, {"id": "paper-journals-prl-QiuW09", "kind": "paper", "title": "Info-margin maximization for feature extraction", "shortTitle": "Info-margin maximization for feature extraction", "subtitle": "Pattern Recognit. Lett. · 2009", "detailBody": "No abstract available.", "year": 2009, "properties": {"title": "Info-margin maximization for feature extraction", "year": 2009, "venue": "Pattern Recognit. Lett.", "coAuthors": ["author-xipengqiu"]}}, {"id": "paper-conf-emnlp-WuZHW09", "kind": "paper", "title": "Phrase Dependency Parsing for Opinion Mining", "shortTitle": "Phrase Dependency Parsing for Opinion Mining", "subtitle": "EMNLP · 2009", "detailBody": "Yuanbin Wu, Qi Zhang, Xuanjing Huang, Lide Wu. Proceedings of the 2009 Conference on Empirical Methods in Natural Language Processing. 2009.", "year": 2009, "properties": {"title": "Phrase Dependency Parsing for Opinion Mining", "year": 2009, "venue": "EMNLP", "coAuthors": ["author-yuanbinwu", "author-qizhang", "author-xuanjinghuang"]}}, {"id": "paper-conf-icml-QianJZHW09", "kind": "paper", "title": "Sparse higher order conditional random fields for improved sequence labeling", "shortTitle": "Sparse higher order conditional random fields for impro…", "subtitle": "ICML · 2009", "detailBody": "No abstract available.", "year": 2009, "properties": {"title": "Sparse higher order conditional random fields for improved sequence labeling", "year": 2009, "venue": "ICML", "coAuthors": ["author-xianqian", "author-xiaoqianjiang", "author-qizhang", "author-xuanjinghuang"]}}, {"id": "paper-conf-sigir-ZhangSHW09", "kind": "paper", "title": "Template-independent wrapper for web forums", "shortTitle": "Template-independent wrapper for web forums", "subtitle": "SIGIR · 2009", "detailBody": "No abstract available.", "year": 2009, "properties": {"title": "Template-independent wrapper for web forums", "year": 2009, "venue": "SIGIR", "coAuthors": ["author-qizhang", "author-yangshi", "author-xuanjinghuang"]}}, {"id": "paper-journals-ipm-ZhaoWH09", "kind": "paper", "title": "Using query expansion in graph-based approach for query-focused multi-document summarization", "shortTitle": "Using query expansion in graph-based approach for query…", "subtitle": "Inf. Process. Manag. · 2009", "detailBody": "No abstract available.", "year": 2009, "properties": {"title": "Using query expansion in graph-based approach for query-focused multi-document summarization", "year": 2009, "venue": "Inf. Process. Manag.", "coAuthors": ["author-linzhao", "author-xuanjinghuang"]}}, {"id": "paper-conf-ecai-ShenQHW08", "kind": "paper", "title": "Answering Definition Question: Ranking for Top-k", "shortTitle": "Answering Definition Question: Ranking for Top-k", "subtitle": "ECAI · 2008", "detailBody": "As an important form of complex questions, definition question attracts much attention from QA researchers. For many of the definition question answering systems, it is a core step to rank the candidate answer sentences, so that the top-k in the ranked list can be extracted. We integrate these evidences as features into a whole framework, and propose a novel method to learning weights of these features to rank the candidate answer sentences.", "year": 2008, "properties": {"title": "Answering Definition Question: Ranking for Top-k", "year": 2008, "venue": "ECAI", "coAuthors": ["author-chaoshen", "author-xipengqiu", "author-xuanjinghuang"]}}, {"id": "paper-conf-airs-ZhangQHW08", "kind": "paper", "title": "Domain Adaptation for Conditional Random Fields", "shortTitle": "Domain Adaptation for Conditional Random Fields", "subtitle": "AIRS · 2008", "detailBody": "Conditional Random Fields (CRFs) have received a great amount of attentions in many fields and achieved good results. However, a case frequently encountered in practice is that the test data&#8217;s domain is different with the training data&#8217;s. It would affect...", "year": 2008, "properties": {"title": "Domain Adaptation for Conditional Random Fields", "year": 2008, "venue": "AIRS", "coAuthors": ["author-qizhang", "author-xipengqiu", "author-xuanjinghuang"]}}, {"id": "paper-conf-airs-ZhangZHW08", "kind": "paper", "title": "Graph Mutual Reinforcement Based Bootstrapping", "shortTitle": "Graph Mutual Reinforcement Based Bootstrapping", "subtitle": "AIRS · 2008", "detailBody": "In this paper, we present a new bootstrapping method based on Graph Mutual Reinforcement (GMR-Bootstrapping) to learn semantic lexicons. The novelties of this work include 1) We integrate Graph Mutual Reinforcement method with the Bootstrapping structure to sort the...", "year": 2008, "properties": {"title": "Graph Mutual Reinforcement Based Bootstrapping", "year": 2008, "venue": "AIRS", "coAuthors": ["author-qizhang", "author-yaqianzhou", "author-xuanjinghuang"]}}, {"id": "paper-journals-ijcpol-ZhangHW08", "kind": "paper", "title": "Sentiment Classification Using Supervised and Semi-Supervised Conditional Maximum Entropy Modeling", "shortTitle": "Sentiment Classification Using Supervised and Semi-Supe…", "subtitle": "Int. J. Comput. Process. Orient. Lang. · 2008", "detailBody": "No abstract available.", "year": 2008, "properties": {"title": "Sentiment Classification Using Supervised and Semi-Supervised Conditional Maximum Entropy Modeling", "year": 2008, "venue": "Int. J. Comput. Process. Orient. Lang.", "coAuthors": ["author-qizhang", "author-xuanjinghuang"]}}, {"id": "paper-conf-airs-CaoWHZL08", "kind": "paper", "title": "Using Multiple Combined Ranker for Answering Definitional Questions", "shortTitle": "Using Multiple Combined Ranker for Answering Definition…", "subtitle": "AIRS · 2008", "detailBody": "This paper presents a Multiple Combined Ranker (MCR) approach for answering definitional questions. Generally, our MCR approach first extracts question target-related knowledge as much as possible, then using this knowledge to pick up appropriate question answers....", "year": 2008, "properties": {"title": "Using Multiple Combined Ranker for Answering Definitional Questions", "year": 2008, "venue": "AIRS", "coAuthors": ["author-junkuocao", "author-xuanjinghuang", "author-yaqianzhou", "author-feiliu"]}}, {"id": "paper-journals-ijon-QiuW07", "kind": "paper", "title": "Two-dimensional nearest neighbor discriminant analysis", "shortTitle": "Two-dimensional nearest neighbor discriminant analysis", "subtitle": "Neurocomputing · 2007", "detailBody": "No abstract available.", "year": 2007, "properties": {"title": "Two-dimensional nearest neighbor discriminant analysis", "year": 2007, "venue": "Neurocomputing", "coAuthors": ["author-xipengqiu"]}}, {"id": "paper-conf-paclic-FeiHW06", "kind": "paper", "title": "Mining the Relation between Sentiment Expression and Target Using Dependency of Words", "shortTitle": "Mining the Relation between Sentiment Expression and Ta…", "subtitle": "PACLIC · 2006", "detailBody": "Zhongchao Fei, Xuanjing Huang, Lide Wu. Proceedings of the 20th Pacific Asia Conference on Language, Information and Computation. 2006.", "year": 2006, "properties": {"title": "Mining the Relation between Sentiment Expression and Target Using Dependency of Words", "year": 2006, "venue": "PACLIC", "coAuthors": ["author-zhongchaofei", "author-xuanjinghuang"]}}, {"id": "paper-journals-ijprai-QiuW06", "kind": "paper", "title": "Nearest Neighbor Discriminant Analysis", "shortTitle": "Nearest Neighbor Discriminant Analysis", "subtitle": "Int. J. Pattern Recognit. Artif. Intell. · 2006", "detailBody": "Linear Discriminant Analysis (LDA) is a popular feature extraction technique in statistical pattern recognition. However, it often suffers from the small sample size problem when dealing with high-dimensional data. Moreover, while LDA is guaranteed to find the best directions when each class has a Gaussian density with a common covariance matrix, it can fail if the class densities are more general. In this paper, a novel nonparametric linear feature extraction method, nearest neighbor discriminant analysis (NNDA), is proposed from the view of the nearest neighbor classification. NNDA finds the important discriminant directions without assuming the class densities belong to any particular parametric family. It does not depend on the nonsingularity of the within-class scatter matrix either. Then we give an approximate approach to optimize NNDA and an extension to k-NN. We apply NNDA to the simulated data and real world data, the results demonstrate that NNDA outperforms the existing variant LDA methods.", "year": 2006, "properties": {"title": "Nearest Neighbor Discriminant Analysis", "year": 2006, "venue": "Int. J. Pattern Recognit. Artif. Intell.", "coAuthors": ["author-xipengqiu"]}}, {"id": "paper-journals-pr-GuoWLFX06", "kind": "paper", "title": "Null Foley-Sammon transform", "shortTitle": "Null Foley-Sammon transform", "subtitle": "Pattern Recognit. · 2006", "detailBody": "No abstract available.", "year": 2006, "properties": {"title": "Null Foley-Sammon transform", "year": 2006, "venue": "Pattern Recognit.", "coAuthors": ["author-yuefeiguo", "author-honglu", "author-zhefeng", "author-xiangyangxue"]}}, {"id": "paper-conf-ijcnlp-ZhangZHW05", "kind": "paper", "title": "Answering Definition Questions Using Web Knowledge Bases", "shortTitle": "Answering Definition Questions Using Web Knowledge Bases", "subtitle": "IJCNLP · 2005", "detailBody": "This paper presents a definition question answering approach, which is capable of mining textual definitions from large collections of documents. In order to automatically identify definition sentences from a large collection of documents, we utilize the existing...", "year": 2005, "properties": {"title": "Answering Definition Questions Using Web Knowledge Bases", "year": 2005, "venue": "IJCNLP", "coAuthors": ["author-zhushuozhang", "author-yaqianzhou", "author-xuanjinghuang"]}}, {"id": "paper-conf-iccv-QiuW05", "kind": "paper", "title": "Face Recognition by Stepwise Nonparametric Margin Maximum Criterion", "shortTitle": "Face Recognition by Stepwise Nonparametric Margin Maxim…", "subtitle": "ICCV · 2005", "detailBody": "Linear discriminant analysis (LDA) is a popular feature extraction technique in face recognition. However, it often suffers from the small sample size problem when dealing with the high dimensional data. Moreover, while LDA is guaranteed to find the best directions when each class has a Gaussian density with a common covariance matrix, it can fail if the class densities are more general. In this paper; a new nonparametric linear feature extraction method, stepwise nonparametric margin maximum criterion (SNMMC), is proposed to find the most discriminant directions, which does not assume that the class densities belong to any particular parametric family and does not depend on the non- singularity of the within-class scatter matrix neither. On three datasets from ATT and FERET face databases, our experimental results demonstrate that SNMMC outperforms other methods and is robust to variations of pose, illumination and expression.", "year": 2005, "properties": {"title": "Face Recognition by Stepwise Nonparametric Margin Maximum Criterion", "year": 2005, "venue": "ICCV", "coAuthors": ["author-xipengqiu"]}}, {"id": "paper-journals-corr-abs-cs-0509072", "kind": "paper", "title": "Folksonomy as a Complex Network", "shortTitle": "Folksonomy as a Complex Network", "subtitle": "CoRR · 2005", "detailBody": "Folksonomy is an emerging technology that works to classify the information over WWW through tagging the bookmarks, photos or other web-based contents. It is understood to be organized by every user while not limited to the authors of the contents and the professional editors. This study surveyed the folksonomy as a complex network. The result indicates that the network, which is composed of the tags from the folksonomy, displays both properties of small world and scale-free. However, the statistics only shows a local and static slice of the vast body of folksonomy which is still evolving.", "year": 2005, "properties": {"title": "Folksonomy as a Complex Network", "year": 2005, "venue": "CoRR", "coAuthors": ["author-kaikaishen"]}}, {"id": "paper-conf-mmm-RongMW05", "kind": "paper", "title": "Gradual Transition Detection Using EM Curve Fitting", "shortTitle": "Gradual Transition Detection Using EM Curve Fitting", "subtitle": "MMM · 2005", "detailBody": "Videos are made up of shots, which are connected by variant shot transitions can be categorized into hard cuts and gradual transitions. And gradual transitions can be further classified into dissolve, fade in, fade out, wipe. Shot boundary detection is the first step for video content analysis, indexing and classification. In this paper, we propose a novel approach for gradual transition detection. Our schema is to estimate the peaks on the frame to frame difference curve by EM (Expectation Maximum) curve fitting. Each peak contour is approximated by a mixture of Gaussian and uniform distributions. The weight of uniform component, the average height and the relative height of the peak are used as input features for the decision tree classifier to discriminate gradual transitions from cuts and miscellaneous. Finally, we present a framework for shot boundary detection involving camera motion detection and the combination of cut and gradual transition detection results. The advantage of our method is that it can detect all kinds of gradual transition types, such as dissolve, wipe or special effects, due to the flexibility of EM curve fitting.", "year": 2005, "properties": {"title": "Gradual Transition Detection Using EM Curve Fitting", "year": 2005, "venue": "MMM", "coAuthors": ["author-jiaweirong", "author-yufeima"]}}, {"id": "paper-journals-tmm-ZhuEXWC05", "kind": "paper", "title": "InsightVideo: toward hierarchical video content organization for efficient browsing, summarization and retrieval", "shortTitle": "InsightVideo: toward hierarchical video content organiz…", "subtitle": "IEEE Trans. Multim. · 2005", "detailBody": "Hierarchical video browsing and feature-based video retrieval are two standard methods for accessing video content. Very little research, however, has addressed the benefits of integrating these two methods for more effective and efficient video content access. In this paper, we introduce InsightVideo, a video analysis and retrieval system, which joins video content hierarchy, hierarchical browsing and retrieval for efficient video access. We propose several video processing techniques to organize the content hierarchy of the video. We first apply a camera motion classification and key-frame extraction strategy that operates in the compressed domain to extract video features. Then, shot grouping, scene detection and pairwise scene clustering strategies are applied to construct the video content hierarchy. We introduce a video similarity evaluation scheme at different levels (key-frame, shot, group, scene, and video.) By integrating the video content hierarchy and the video similarity evaluation scheme, hierarchical video browsing and retrieval are seamlessly integrated for efficient content access. We construct a progressive video retrieval scheme to refine user queries through the interactions of browsing and retrieval. Experimental results and comparisons of camera motion classification, key-frame extraction, scene detection, and video retrieval are presented to validate the effectiveness and efficiency of the proposed algorithms and the performance of the system.", "year": 2005, "properties": {"title": "InsightVideo: toward hierarchical video content organization for efficient browsing, summarization and retrieval", "year": 2005, "venue": "IEEE Trans. Multim.", "coAuthors": ["author-xingquanzhu", "author-ahmedkelmagarmid", "author-xiangyangxue", "author-annchristinecatlin"]}}, {"id": "paper-conf-icip-QiuW05", "kind": "paper", "title": "Nonparametric maximum margin criterion for face recognition", "shortTitle": "Nonparametric maximum margin criterion for face recogni…", "subtitle": "ICIP (2) · 2005", "detailBody": "Linear discriminant analysis (LDA) is a popular feature extraction technique in statistical pattern recognition. However, it often suffers from the small sample size problem when dealing with the high dimensional image data. Moreover, while LDA is guaranteed to find the best directions when each class has a Gaussian density with a common covariance matrix, it can fail if the class densities are more general. In this paper, a new feature extraction method, nonparametric maximum margin criterion (NMMC), is proposed. NMMC finds the important discriminant directions without assuming the class densities belong to any particular parametric family, and it does not depend on the nonsingularity of the within-class scatter matrix. Our experimental results on the ATT and FERET face databases demonstrate that NMMC outperforms the existing variant LDA methods and the other state-of-art face recognition approaches.", "year": 2005, "properties": {"title": "Nonparametric maximum margin criterion for face recognition", "year": 2005, "venue": "ICIP (2)", "coAuthors": ["author-xipengqiu"]}}, {"id": "paper-conf-icip-QiuW05a", "kind": "paper", "title": "Null space-based LDA with weighted dual personal subspaces for face recognition", "shortTitle": "Null space-based LDA with weighted dual personal subspa…", "subtitle": "ICIP (2) · 2005", "detailBody": "Linear discriminant analysis (LDA) is popular feature extraction technique for face recognition. However, it often suffers the small sample size problem when dealing with the high dimensional face data. Moreover, the within-class and between-class scatter matrix used in LDA have low effective when dealing with face data of non-Gaussian density. In this paper, we propose a new method for face recognition. We first calculate the weighted dual personal subspaces to replace the within and between class matrix, then null space-based LDA is performed. The experiments show our method outperforms existing LDA and state-of-art face recognition approaches.", "year": 2005, "properties": {"title": "Null space-based LDA with weighted dual personal subspaces for face recognition", "year": 2005, "venue": "ICIP (2)", "coAuthors": ["author-xipengqiu"]}}, {"id": "paper-conf-ijcnlp-LiHW05", "kind": "paper", "title": "Question Classification using Multiple Classifiers", "shortTitle": "Question Classification using Multiple Classifiers", "subtitle": "ALR/ALRN@IJCNLP · 2005", "detailBody": "Xin Li, Xuan-Jing Huang, Li-de Wu. Proceedings of the Fifth Workshop on Asian Language Resources (ALR-05) and First Symposium on Asian Language Resources Network (ALRN). 2005.", "year": 2005, "properties": {"title": "Question Classification using Multiple Classifiers", "year": 2005, "venue": "ALR/ALRN@IJCNLP", "coAuthors": ["author-xinli", "author-xuanjinghuang"]}}, {"id": "paper-conf-ijcai-QiuW05", "kind": "paper", "title": "Stepwise Nearest Neighbor Discriminant Analysis", "shortTitle": "Stepwise Nearest Neighbor Discriminant Analysis", "subtitle": "IJCAI · 2005", "detailBody": "No abstract available.", "year": 2005, "properties": {"title": "Stepwise Nearest Neighbor Discriminant Analysis", "year": 2005, "venue": "IJCAI", "coAuthors": ["author-xipengqiu"]}}, {"id": "paper-conf-naacl-DuMHW05", "kind": "paper", "title": "The Use of Metadata, Web-derived Answer Patterns and Passage Context to Improve Reading Comprehension Performance", "shortTitle": "The Use of Metadata, Web-derived Answer Patterns and Pa…", "subtitle": "HLT/EMNLP · 2005", "detailBody": "Yongping Du, Helen Meng, Xuanjing Huang, Lide Wu. Proceedings of Human Language Technology Conference and Conference on Empirical Methods in Natural Language Processing. 2005.", "year": 2005, "properties": {"title": "The Use of Metadata, Web-derived Answer Patterns and Passage Context to Improve Reading Comprehension Performance", "year": 2005, "venue": "HLT/EMNLP", "coAuthors": ["author-yongpingdu", "author-helenmeng", "author-xuanjinghuang"]}}, {"id": "paper-conf-ijcnlp-ZhouHGW05", "kind": "paper", "title": "Transformation Based Chinese Entity Detection and Tracking", "shortTitle": "Transformation Based Chinese Entity Detection and Track…", "subtitle": "IJCNLP (companion) · 2005", "detailBody": "Yaqian Zhou, Changning Huang, Jianfeng Gao, Lide Wu. Companion Volume to the Proceedings of Conference including Posters/Demos and tutorial abstracts. 2005.", "year": 2005, "properties": {"title": "Transformation Based Chinese Entity Detection and Tracking", "year": 2005, "venue": "IJCNLP (companion)", "coAuthors": ["author-yaqianzhou", "author-changninghuang", "author-jianfenggao"]}}, {"id": "paper-journals-tkde-ZhuWEFW05", "kind": "paper", "title": "Video Data Mining: Semantic Indexing and Event Detection from the Association Perspective", "shortTitle": "Video Data Mining: Semantic Indexing and Event Detectio…", "subtitle": "IEEE Trans. Knowl. Data Eng. · 2005", "detailBody": "Advances in the media and entertainment industries, including streaming audio and digital TV, present new challenges for managing and accessing large audio-visual collections. Current content management systems support retrieval using low-level features, such as motion, color, and texture. However, low-level features often have little meaning for naive users, who much prefer to identify content using high-level semantics or concepts. This creates a gap between systems and their users that must be bridged for these systems to be used effectively. To this end, in this paper, we first present a knowledge-based video indexing and content management framework for domain specific videos (using basketball video as an example). We will provide a solution to explore video knowledge by mining associations from video data. The explicit definitions and evaluation measures (e.g., temporal support and confidence) for video associations are proposed by integrating the distinct feature of video data. Our approach uses video processing techniques to find visual and audio cues (e.g., court field, camera motion activities, and applause), introduces multilevel sequential association mining to explore associations among the audio and visual cues, classifies the associations by assigning each of them with a class label, and uses their appearances in the video to construct video indices. Our experimental results demonstrate the performance of the proposed approach.", "year": 2005, "properties": {"title": "Video Data Mining: Semantic Indexing and Event Detection from the Association Perspective", "year": 2005, "venue": "IEEE Trans. Knowl. Data Eng.", "coAuthors": ["author-xingquanzhu", "author-xindongwu", "author-ahmedkelmagarmid", "author-zhefeng"]}}, {"id": "paper-conf-ijcnlp-DuHLW04", "kind": "paper", "title": "A Novel Pattern Learning Method for Open Domain Question Answering", "shortTitle": "A Novel Pattern Learning Method for Open Domain Questio…", "subtitle": "IJCNLP · 2004", "detailBody": "Open Domain Question Answering (QA) represents an advanced application of natural language processing. We develop a novel pattern based method for implementing answer extraction in QA. For each type of question, the corresponding answer patterns can be learned from...", "year": 2004, "properties": {"title": "A Novel Pattern Learning Method for Open Domain Question Answering", "year": 2004, "venue": "IJCNLP", "coAuthors": ["author-yongpingdu", "author-xuanjinghuang", "author-xinli"]}}, {"id": "paper-conf-icpr-WangJW04", "kind": "paper", "title": "A Novel Video Caption Detection Approach Using Multi-Frame Integration", "shortTitle": "A Novel Video Caption Detection Approach Using Multi-Fr…", "subtitle": "ICPR (1) · 2004", "detailBody": "Captions in videos often play an important role in video information indexing and retrieval. In this paper, we present a novel video caption detection approach. We first apply a new multiple frame integration (MFI) method to minimize variation of the background of the image. A time-based minimum (or maximum) pixel value search is employed and a Sobel edge map is used to determine the mode of search. Then block-based text detection is performed, i.e., a small window is used to scan the image and classify as text or non-text, using Sobel edges as features. We use a two-level pyramid to detect various text sizes. Finally, we present a new iterative text line decomposition method and accurate text bounding boxes are extracted from candidate text areas. Experimental result shows that the proposed approach achieves high precision and recall.", "year": 2004, "properties": {"title": "A Novel Video Caption Detection Approach Using Multi-Frame Integration", "year": 2004, "venue": "ICPR (1)", "coAuthors": ["author-rongrongwang", "author-wanjunjin"]}}, {"id": "paper-conf-ijcnlp-YouDGHW04", "kind": "paper", "title": "BBS Based Hot Topic Retrieval Using Back-Propagation Neural Network", "shortTitle": "BBS Based Hot Topic Retrieval Using Back-Propagation Ne…", "subtitle": "IJCNLP · 2004", "detailBody": "BBS, often referred to as forum, is a system that offers so much information, where people talk about various topics. Some topics are hot while others are unpopular. It&#8217;s rather a hard job for a person to find out hot topics in these tons of information. In...", "year": 2004, "properties": {"title": "BBS Based Hot Topic Retrieval Using Back-Propagation Neural Network", "year": 2004, "venue": "IJCNLP", "coAuthors": ["author-lanyou", "author-yongpingdu", "author-jiayinge", "author-xuanjinghuang"]}}, {"id": "paper-conf-icmcs-QiuFW04", "kind": "paper", "title": "Boosting image classification scheme", "shortTitle": "Boosting image classification scheme", "subtitle": "ICME · 2004", "detailBody": "Image classification is very active and promising research domain in image retrieval and management. We propose a boosting image classification scheme with automatic selection of discriminative features. Firstly, we present an image feature called the orientational color correlogram (OCC) and apply it to image classification. OCC extends the color correlogram by adding in orientational information which can take into account both the local color correlation and the global context structure of an image. Secondly, we give a solution to feature selection for the very high dimensionality of OCC by using a boosting classification scheme which can select the most discriminative features automatically. In our experiments, only a small number of elements of OCC are selected, which can reduce the storage space of classifier models and speed up the classification process. The experimental results suggest the proposed method has preferable performances.", "year": 2004, "properties": {"title": "Boosting image classification scheme", "year": 2004, "venue": "ICME", "coAuthors": ["author-xipengqiu", "author-zhefeng"]}}, {"id": "paper-journals-tmm-FanEZAW04", "kind": "paper", "title": "ClassView: hierarchical video shot classification, indexing, and accessing", "shortTitle": "ClassView: hierarchical video shot classification, inde…", "subtitle": "IEEE Trans. Multim. · 2004", "detailBody": "Recent advances in digital video compression and networks have made video more accessible than ever. However, the existing content-based video retrieval systems still suffer from the following problems. 1) Semantics-sensitive video classification problem because of the semantic gap between low-level visual features and high-level semantic visual concepts; 2) Integrated video access problem because of the lack of efficient video database indexing, automatic video annotation, and concept-oriented summary organization techniques. In this paper, we have proposed a novel framework, called ClassView, to make some advances toward more efficient video database indexing and access. 1) A hierarchical semantics-sensitive video classifier is proposed to shorten the semantic gap. The hierarchical tree structure of the semantics-sensitive video classifier is derived from the domain-dependent concept hierarchy of video contents in a database. Relevance analysis is used for selecting the discriminating visual features with suitable importances. The Expectation-Maximization (EM) algorithm is also used to determine the classification rule for each visual concept node in the classifier. 2) A hierarchical video database indexing and summary presentation technique is proposed to support more effective video access over a large-scale database. The hierarchical tree structure of our video database indexing scheme is determined by the domain-dependent concept hierarchy which is also used for video classification. The presentation of visual summary is also integrated with the inherent hierarchical video database indexing tree structure. Integrating video access with efficient database indexing tree structure has provided great opportunity for supporting more powerful video search engines.", "year": 2004, "properties": {"title": "ClassView: hierarchical video shot classification, indexing, and accessing", "year": 2004, "venue": "IEEE Trans. Multim.", "coAuthors": ["author-jianpingfan", "author-ahmedkelmagarmid", "author-xingquanzhu", "author-walidgaref"]}}, {"id": "paper-conf-isnn-YouHWYWN04", "kind": "paper", "title": "Exploring Various Features to Optimize Hot Topic Retrieval on WEB", "shortTitle": "Exploring Various Features to Optimize Hot Topic Retrie…", "subtitle": "ISNN (1) · 2004", "detailBody": "BBS is an electrical forum on Web where people discuss many topics. So it&#8217;s a challenging problem to retrieve hot topics from it. There are various features of hot topics. Though count of posts on BBS about topic is a simple and effective feature for hotness of...", "year": 2004, "properties": {"title": "Exploring Various Features to Optimize Hot Topic Retrieval on WEB", "year": 2004, "venue": "ISNN (1)", "coAuthors": ["author-lanyou", "author-xuanjinghuang", "author-haoyu", "author-junwang", "author-fumihitonishino"]}}, {"id": "paper-conf-icadl-HuangHW04", "kind": "paper", "title": "Hot-Spot Passage Retrieval in Question Answering", "shortTitle": "Hot-Spot Passage Retrieval in Question Answering", "subtitle": "ICADL · 2004", "detailBody": "Question Answering has been the recent focus of information retrieval research; many systems just incorporate a search engine as a black box and most effort has been devoted to the question analyzer and the answer identifier. In the context of QA, however, passage...", "year": 2004, "properties": {"title": "Hot-Spot Passage Retrieval in Question Answering", "year": 2004, "venue": "ICADL", "coAuthors": ["author-jianhuang", "author-xuanjinghuang"]}}, {"id": "paper-conf-icmcs-RongJW04", "kind": "paper", "title": "Key frame extraction using inter-shot information", "shortTitle": "Key frame extraction using inter-shot information", "subtitle": "ICME · 2004", "detailBody": "Key frame extraction is one of the basic procedures relating to video retrieval and summary. Efficient key frame extraction techniques will facilitate video browsing systems, which have wide applications in the real world. We establish a new criterion for well-representative key frames and correspondingly, create a key frame selection algorithm based on FF-ISF. Its novelty lies in that it not only uses intra-shot information but inter-shot information as well, for key frame extraction.", "year": 2004, "properties": {"title": "Key frame extraction using inter-shot information", "year": 2004, "venue": "ICME", "coAuthors": ["author-jiaweirong", "author-wanjunjin"]}}, {"id": "paper-conf-icmcs-JinWW04", "kind": "paper", "title": "Patch-based natural object detection using CF*IRF", "shortTitle": "Patch-based natural object detection using CF*IRF", "subtitle": "ICME · 2004", "detailBody": "We propose a patch-based approach for detecting natural objects on keyframes of video shots. We apply it on the extraction of semantic feature &#034;vegetation&#034; and &#034;animal&#034;, and on some search tasks in TRECVID2003. Our detection method is based on color and texture features, and considers the spatial information as well. TRECVID evaluation shows that our approach works effectively and can deal with the special situation when the target object only occupies a small portion of the whole image. The main contribution of our approach is as follows: first, we devise a novel color weighting scheme which is named CF*IRF. Second, we use a patch-based detection method for the feature extraction task, and test it in an open large video corpus. Finally, spatial constraints of patches are defined in image tessellation, which provides more flexibility.", "year": 2004, "properties": {"title": "Patch-based natural object detection using CF*IRF", "year": 2004, "venue": "ICME", "coAuthors": ["author-wanjunjin", "author-rongrongwang"]}}, {"id": "paper-conf-jcdl-FanLXW04", "kind": "paper", "title": "Semantic video classification and feature subset selection under context and concept uncertainty", "shortTitle": "Semantic video classification and feature subset select…", "subtitle": "JCDL · 2004", "detailBody": "No abstract available.", "year": 2004, "properties": {"title": "Semantic video classification and feature subset selection under context and concept uncertainty", "year": 2004, "venue": "JCDL", "coAuthors": ["author-jianpingfan", "author-hangzailuo", "author-jingxiao"]}}, {"id": "paper-conf-emnlp-ZhouWWS03", "kind": "paper", "title": "A Fast Algorithm for Feature Selection in Conditional Maximum Entropy Modeling", "shortTitle": "A Fast Algorithm for Feature Selection in Conditional M…", "subtitle": "EMNLP · 2003", "detailBody": "Yaqian Zhou, Fuliang Weng, Lide Wu, Hauke Schmidt. Proceedings of the 2003 Conference on Empirical Methods in Natural Language Processing. 2003.", "year": 2003, "properties": {"title": "A Fast Algorithm for Feature Selection in Conditional Maximum Entropy Modeling", "year": 2003, "venue": "EMNLP", "coAuthors": ["author-yaqianzhou", "author-fuliangweng", "author-haukeschmidt"]}}, {"id": "paper-journals-prl-GuoLYSW03", "kind": "paper", "title": "A generalized Foley-Sammon transform based on generalized fisher discriminant criterion and its application to face recognition", "shortTitle": "A generalized Foley-Sammon transform based on generaliz…", "subtitle": "Pattern Recognit. Lett. · 2003", "detailBody": "No abstract available.", "year": 2003, "properties": {"title": "A generalized Foley-Sammon transform based on generalized fisher discriminant criterion and its application to face recognition", "year": 2003, "venue": "Pattern Recognit. Lett.", "coAuthors": ["author-yuefeiguo", "author-shijinli", "author-jingyuyang", "author-tingtingshu"]}}, {"id": "paper-journals-mta-FanZNW03", "kind": "paper", "title": "Accessing Video Contents through Key Objects over IP", "shortTitle": "Accessing Video Contents through Key Objects over IP", "subtitle": "Multim. Tools Appl. · 2003", "detailBody": "In order to support content-based video database access over the Internet Protocol (IP), achieving the following objectives are important: (i) video query by a representative object (key object) or some statistical characterization of the target contents, (ii) bandwidth-efficient browsing over IP, and (iii) scalable and user-centric video transmission over a heterogeneous and variable-bandwidth network. We present a video object extraction and scalable coding system designed to meet the above objectives. In our system, key objects of meaning to video database users are generated via a human-computer-interaction procedure, and are tracked across frames. Given a key object, an algorithm classifies a subset of its VOPs as key VOPs. This subset forms the basis of a highly bandwidth-efficient base layer for supporting activities such as browsing and refining queries. Over the base layer, a number of enhancement layers can be defined to progressively increase the spatial and temporal resolutions of retrieved video. It is expected that heterogeneous users can subscribe to different numbers of the enhancement layers according to their own conditions, such as access authorization, available connection bandwidth, and quality preference.", "year": 2003, "properties": {"title": "Accessing Video Contents through Key Objects over IP", "year": 2003, "venue": "Multim. Tools Appl.", "coAuthors": ["author-jianpingfan", "author-xingquanzhu", "author-kayvannajarian"]}}, {"id": "paper-conf-icmcs-FengZWL03", "kind": "paper", "title": "Audio classification based on maximum entropy model", "shortTitle": "Audio classification based on maximum entropy model", "subtitle": "ICME · 2003", "detailBody": "Audio classification has been investigated for several years. It is one of the key components in audio and video applications. In prior work, the accuracy under complicated condition is not satisfactory enough and the results highly depend on the dataset. In this paper, we present a novel audio classification method based on maximum entropy model. By applying this method on some widely used features, different feature combinations are considered during model training and a better performance can be achieved. When evaluated it in TREC 2002 Video Track&#039;s speech/music feature extraction task, this method works well for both speech and music among participated systems.", "year": 2003, "properties": {"title": "Audio classification based on maximum entropy model", "year": 2003, "venue": "ICME", "coAuthors": ["author-zhefeng", "author-yaqianzhou", "author-zonggeli"]}}, {"id": "paper-journals-chinaf-YuWWLW03", "kind": "paper", "title": "Morphological neural networks for automatic target detection by simulated annealing learning algorithm", "shortTitle": "Morphological neural networks for automatic target dete…", "subtitle": "Sci. China Ser. F Inf. Sci. · 2003", "detailBody": "No abstract available.", "year": 2003, "properties": {"title": "Morphological neural networks for automatic target detection by simulated annealing learning algorithm", "year": 2003, "venue": "Sci. China Ser. F Inf. Sci.", "coAuthors": ["author-nongyu", "author-haowu", "author-changyongwu", "author-fanmingli"]}}, {"id": "paper-conf-icmcs-LuMZW02", "kind": "paper", "title": "An integrated correlation measure for semantic video segmentation", "shortTitle": "An integrated correlation measure for semantic video se…", "subtitle": "ICME (1) · 2002", "detailBody": "Semantic segmentation is critical in video content analysis and retrieval. We propose an approach to semantic video segmentation by integrating multiple video cues into a generic scheme. We define a consistency measurement of contexts, continuity, which has two components, called cohesion and disjunction. As a result we can treat all the features, both low level features and semantic features, in the same way. At each shot boundary, the continuity measurement gives a confidence of being the boundary between two semantic units. The effectiveness of our approach has been demonstrated by experiments on all kinds of live videos.", "year": 2002, "properties": {"title": "An integrated correlation measure for semantic video segmentation", "year": 2002, "venue": "ICME (1)", "coAuthors": ["author-xiaoyelu", "author-yufeima", "author-hongjiangzhang"]}}, {"id": "paper-journals-ijprai-HuXW02", "kind": "paper", "title": "Automatic Detection and Verification of Text Regions in News Video Frames", "shortTitle": "Automatic Detection and Verification of Text Regions in…", "subtitle": "Int. J. Pattern Recognit. Artif. Intell. · 2002", "detailBody": "Textual information in a video is very useful for video indexing and retrieving. Detecting text blocks in video frames is the first important procedure for extracting the textual information. Automatic text location is a very difficult problem due to the large variety of character styles and the complex backgrounds. In this paper, we describe the various steps of the proposed text detection algorithm. First, the gray scale edges are detected and smoothed horizontally. Second, the edge image is binarized, and run length analysis is applied to find candidate text blocks. Finally, each detected block is verified by an improved logical level technique (ILLT). Experiments show this method is not sensitive to color/texture changes of the characters, and can be used to detect text lines in news videos effectively.", "year": 2002, "properties": {"title": "Automatic Detection and Verification of Text Regions in News Video Frames", "year": 2002, "venue": "Int. J. Pattern Recognit. Artif. Intell.", "coAuthors": ["author-jianminghu", "author-jiexi"]}}, {"id": "paper-journals-pr-XiHW02", "kind": "paper", "title": "Page segmentation of Chinese newspapers", "shortTitle": "Page segmentation of Chinese newspapers", "subtitle": "Pattern Recognit. · 2002", "detailBody": "No abstract available.", "year": 2002, "properties": {"title": "Page segmentation of Chinese newspapers", "year": 2002, "venue": "Pattern Recognit.", "coAuthors": ["author-jiexi", "author-jianminghu"]}}, {"id": "paper-conf-pcm-ZhuXFW02", "kind": "paper", "title": "Qualitative Camera Motion Classification for Content-Based Video Indexing", "shortTitle": "Qualitative Camera Motion Classification for Content-Ba…", "subtitle": "IEEE Pacific Rim Conference on Multimedia · 2002", "detailBody": "Due to the fact that the camera motion usually imply some hints which are helpful in bridging the gap between computationally available features and semantic interpretations, extensive researches have been executed to extract them for various purposes. However, these...", "year": 2002, "properties": {"title": "Qualitative Camera Motion Classification for Content-Based Video Indexing", "year": 2002, "venue": "IEEE Pacific Rim Conference on Multimedia", "coAuthors": ["author-xingquanzhu", "author-xiangyangxue", "author-jianpingfan"]}}, {"id": "paper-conf-pcm-ZhuFXWE02", "kind": "paper", "title": "Semi-automatic Video Content Annotation", "shortTitle": "Semi-automatic Video Content Annotation", "subtitle": "IEEE Pacific Rim Conference on Multimedia · 2002", "detailBody": "Video modeling and annotating are indispensable operations necessary for creating and populating a video database. To annotate video data effectively and accurately, a video content description ontology is first proposed in this paper, we then introduce a...", "year": 2002, "properties": {"title": "Semi-automatic Video Content Annotation", "year": 2002, "venue": "IEEE Pacific Rim Conference on Multimedia", "coAuthors": ["author-xingquanzhu", "author-jianpingfan", "author-xiangyangxue", "author-ahmedkelmagarmid"]}}, {"id": "paper-conf-ercimdl-SmeatonOCVDHRSW02", "kind": "paper", "title": "The TREC2001 Video Track: Information Retrieval on Digital Video Information", "shortTitle": "The TREC2001 Video Track: Information Retrieval on Digi…", "subtitle": "ECDL · 2002", "detailBody": "The development of techniques to support content-based access to archives of digital video information has recently started to receive much attention from the research community. During 2001, the annual TREC activity, which has been benchmarking the performance of...", "year": 2002, "properties": {"title": "The TREC2001 Video Track: Information Retrieval on Digital Video Information", "year": 2002, "venue": "ECDL", "coAuthors": ["author-alanfsmeaton", "author-paulover", "author-cashcostello", "author-arjenpdevries", "author-davidsdoermann", "author-alexanderghauptmann", "author-markerorvig", "author-johnrsmith"]}}, {"id": "paper-journals-tcsv-FanZW01", "kind": "paper", "title": "Automatic model-based semantic object extraction algorithm", "shortTitle": "Automatic model-based semantic object extraction algori…", "subtitle": "IEEE Trans. Circuits Syst. Video Technol. · 2001", "detailBody": "Automatic image segmentation and object extraction play an important role in supporting content-based image coding, indexing, and retrieval. However, the low-level visual homogeneity critical (like color, texture, intensity, and so on) for segmentation do not lead to semantic objects directly because a semantic object can contain totally different gray levels, color, or texture. We propose an automatic model-based semantic object extraction algorithm by integrating object seeds with their region constraint graphs (perceptual models). Images are first partitioned into a set of homogeneous regions with accurate boundaries by integrating the results obtained by similarity-based region growing and edge detection procedures. We propose a 1-D fast entropic thresholding technique for determining the thresholds used in region growing and edge detection automatically. The object seeds, which are the intuitive and representative parts of semantic objects, are then distinguished from these homogeneous image regions. A seeded region aggregation procedure is used for merging the adjacent regions of a detected object seed to give a semantic object according to the perceptual model of the object. We focus on semantic human object generation by taking faces as object seeds and using a ratio-based perceptual model.", "year": 2001, "properties": {"title": "Automatic model-based semantic object extraction algorithm", "year": 2001, "venue": "IEEE Trans. Circuits Syst. Video Technol.", "coAuthors": ["author-jianpingfan", "author-xingquanzhu"]}}, {"id": "paper-journals-jvcir-FanJW01", "kind": "paper", "title": "Automatic Moving Object Extraction toward Content-Based Video Representation and Indexing", "shortTitle": "Automatic Moving Object Extraction toward Content-Based…", "subtitle": "J. Vis. Commun. Image Represent. · 2001", "detailBody": "No abstract available.", "year": 2001, "properties": {"title": "Automatic Moving Object Extraction toward Content-Based Video Representation and Indexing", "year": 2001, "venue": "J. Vis. Commun. Image Represent.", "coAuthors": ["author-jianpingfan", "author-yongchangji"]}}, {"id": "paper-conf-pcm-ZhuWXLF01", "kind": "paper", "title": "Automatic Scene Detection in News Program by Integrating Visual Feature and Rules", "shortTitle": "Automatic Scene Detection in News Program by Integratin…", "subtitle": "IEEE Pacific Rim Conference on Multimedia · 2001", "detailBody": "Organizing video sequences from shot level to scene level is a challenging task, however, without the scene information, it will be very hard to extract the content of the video. In this paper, a visual and rule information integrated strategy is proposed to detect...", "year": 2001, "properties": {"title": "Automatic Scene Detection in News Program by Integrating Visual Feature and Rules", "year": 2001, "venue": "IEEE Pacific Rim Conference on Multimedia", "coAuthors": ["author-xingquanzhu", "author-xiangyangxue", "author-xiaoyelu", "author-jianpingfan"]}}, {"id": "paper-conf-pcm-LuW01", "kind": "paper", "title": "Double Hierarchical Algorithm for Video Mosaics", "shortTitle": "Double Hierarchical Algorithm for Video Mosaics", "subtitle": "IEEE Pacific Rim Conference on Multimedia · 2001", "detailBody": "This paper presents a double hierarchical algorithm to construct large view mosaics of videos, taken with a camera that is free to pan, tilt, rotate, and zoom. Our method consists of two different hierarchical procedures. The first one deals with the estimation of...", "year": 2001, "properties": {"title": "Double Hierarchical Algorithm for Video Mosaics", "year": 2001, "venue": "IEEE Pacific Rim Conference on Multimedia", "coAuthors": ["author-peizhonglu"]}}, {"id": "paper-conf-iwpt-GuoWW01", "kind": "paper", "title": "Grammar Induction by MDL-Based Distributional Classification", "shortTitle": "Grammar Induction by MDL-Based Distributional Classific…", "subtitle": "IWPT · 2001", "detailBody": "No abstract available.", "year": 2001, "properties": {"title": "Grammar Induction by MDL-Based Distributional Classification", "year": 2001, "venue": "IWPT", "coAuthors": ["author-yikunguo", "author-fuliangweng"]}}, {"id": "paper-conf-nlprs-HuangWGI01", "kind": "paper", "title": "Language Independent Text Categorization", "shortTitle": "Language Independent Text Categorization", "subtitle": "NLPRS · 2001", "detailBody": "No abstract available.", "year": 2001, "properties": {"title": "Language Independent Text Categorization", "year": 2001, "venue": "NLPRS", "coAuthors": ["author-xuanjinghuang", "author-guoweixu", "author-hiroyuliishizaki"]}}, {"id": "paper-journals-jei-ZhuZWHW01", "kind": "paper", "title": "New query refinement and semantics integrated image retrieval system with semiautomatic annotation scheme", "shortTitle": "New query refinement and semantics integrated image ret…", "subtitle": "J. Electronic Imaging · 2001", "detailBody": "No abstract available.", "year": 2001, "properties": {"title": "New query refinement and semantics integrated image retrieval system with semiautomatic annotation scheme", "year": 2001, "venue": "J. Electronic Imaging", "coAuthors": ["author-xingquanzhu", "author-hongjiangzhang", "author-liuwenyin", "author-chunhuihu"]}}, {"id": "paper-conf-pris-XiHW01", "kind": "paper", "title": "Page Segmentation of Chinese Newspaper", "shortTitle": "Page Segmentation of Chinese Newspaper", "subtitle": "PRIS · 2001", "detailBody": "No abstract available.", "year": 2001, "properties": {"title": "Page Segmentation of Chinese Newspaper", "year": 2001, "venue": "PRIS", "coAuthors": ["author-jiexi", "author-jianminghu"]}}, {"id": "paper-conf-pcm-FanZW01", "kind": "paper", "title": "Seeded Semantic Object Generation toward Content-Based Video Indexing", "shortTitle": "Seeded Semantic Object Generation toward Content-Based…", "subtitle": "IEEE Pacific Rim Conference on Multimedia · 2001", "detailBody": "A novel semantic object generation algorithm is proposed by collaborative integration of a new feature-based image segmentation technique and a seeded region aggregation procedure. The homogeneous image regions with closed boundaries are obtained by integrating the...", "year": 2001, "properties": {"title": "Seeded Semantic Object Generation toward Content-Based Video Indexing", "year": 2001, "venue": "IEEE Pacific Rim Conference on Multimedia", "coAuthors": ["author-jianpingfan", "author-xingquanzhu"]}}, {"id": "paper-journals-spic-FanYFOWS01", "kind": "paper", "title": "Spatiotemporal segmentation for compact video representation", "shortTitle": "Spatiotemporal segmentation for compact video represent…", "subtitle": "Signal Process. Image Commun. · 2001", "detailBody": "No abstract available.", "year": 2001, "properties": {"title": "Spatiotemporal segmentation for compact video representation", "year": 2001, "venue": "Signal Process. Image Commun.", "coAuthors": ["author-jianpingfan", "author-junyu", "author-genfujita", "author-takaoonoye", "author-isaoshirakawa"]}}, {"id": "paper-conf-spieSR-XueLW00", "kind": "paper", "title": "Index point data using algebraic lattice", "shortTitle": "Index point data using algebraic lattice", "subtitle": "Storage and Retrieval for Media Databases · 2000", "detailBody": "No abstract available.", "year": 2000, "properties": {"title": "Index point data using algebraic lattice", "year": 2000, "venue": "Storage and Retrieval for Media Databases", "coAuthors": ["author-xiangyangxue", "author-hangzailuo"]}}, {"id": "paper-conf-isspa-XueLCW99", "kind": "paper", "title": "A new way to reduce candidate blocks for block matching motion estimation", "shortTitle": "A new way to reduce candidate blocks for block matching…", "subtitle": "ISSPA · 1999", "detailBody": "A new way to reduce candidate blocks for the block matching algorithm is proposed. It consists of three steps: (1) compute the average luminance of all the concerned blocks by a fast iterative algorithm; (2) calculate the absolute error between the average luminance of the currently concerned block and that of the candidate block within the search window in the previous frame; and (3) remove those candidate blocks with large difference. Then the most similar block will be found by searching the remaining candidate blocks. The complexity of reducing the search space is very small, but it can remove candidate blocks from the search window efficiently and effectively. The simulation results are given to demonstrate the effectiveness of this new algorithm.", "year": 1999, "properties": {"title": "A new way to reduce candidate blocks for block matching motion estimation", "year": 1999, "venue": "ISSPA", "coAuthors": ["author-xiangyangxue", "author-hangzailuo", "author-xueqingchen"]}}, {"id": "paper-conf-acl-vlc-HuangWW97", "kind": "paper", "title": "Statistical Acquisition of Terminology Dictionary", "shortTitle": "Statistical Acquisition of Terminology Dictionary", "subtitle": "VLC · 1997", "detailBody": "Xuan-jing Huang, Li-de Wu, Wen-xin Wang. Fifth Workshop on Very Large Corpora. 1997.", "year": 1997, "properties": {"title": "Statistical Acquisition of Terminology Dictionary", "year": 1997, "venue": "VLC", "coAuthors": ["author-xuanjinghuang", "author-wangwenxin"]}}, {"id": "paper-journals-cviu-WuWW95", "kind": "paper", "title": "The Robust Algorithms for Finding the Center of an Arc", "shortTitle": "The Robust Algorithms for Finding the Center of an Arc", "subtitle": "Comput. Vis. Image Underst. · 1995", "detailBody": "No abstract available.", "year": 1995, "properties": {"title": "The Robust Algorithms for Finding the Center of an Arc", "year": 1995, "venue": "Comput. Vis. Image Underst.", "coAuthors": ["author-zhongquanwu", "author-aichengwu"]}}, {"id": "paper-journals-pami-WuX90", "kind": "paper", "title": "Scaling Theorems for Zero-Crossings", "shortTitle": "Scaling Theorems for Zero-Crossings", "subtitle": "IEEE Trans. Pattern Anal. Mach. Intell. · 1990", "detailBody": "Two scaling theorems are given. Instead of delta functions, polynomial functions are used as input. The advantages are twofold: the smoothness conditions on ker", "year": 1990, "properties": {"title": "Scaling Theorems for Zero-Crossings", "year": 1990, "venue": "IEEE Trans. Pattern Anal. Mach. Intell.", "coAuthors": ["author-zhaohuixie"]}}, {"id": "paper-conf-par-WengLWG88", "kind": "paper", "title": "Fractal Curve and Attribute Grammar", "shortTitle": "Fractal Curve and Attribute Grammar", "subtitle": "Pattern Recognition · 1988", "detailBody": "No abstract available.", "year": 1988, "properties": {"title": "Fractal Curve and Attribute Grammar", "year": 1988, "venue": "Pattern Recognition", "coAuthors": ["author-fuliangweng", "author-qilu", "author-qianggu"]}}, {"id": "paper-conf-icpr-WuX88", "kind": "paper", "title": "On fingerprint theorems", "shortTitle": "On fingerprint theorems", "subtitle": "ICPR · 1988", "detailBody": "Fingerprint theorems, i.e. under what conditions the primal sketch can determine the image uniquely, are discussed. The weakness of A.L. Yuille and T. Poggio&#039;s", "year": 1988, "properties": {"title": "On fingerprint theorems", "year": 1988, "venue": "ICPR", "coAuthors": ["author-zhaohuixie"]}}, {"id": "paper-conf-icpr-XieW88", "kind": "paper", "title": "The &#8711; 2 G performance in the presence of noise", "shortTitle": "The &#8711; 2 G performance in the presence of noise", "subtitle": "ICPR · 1988", "detailBody": "The Laplacian of Gaussian operator, Del /sup 2/G, is very important as an edge detector in the theory of computer vision. The bias of zero-crossing and output s", "year": 1988, "properties": {"title": "The &#8711; 2 G performance in the presence of noise", "year": 1988, "venue": "ICPR", "coAuthors": ["author-zhaohuixie"]}}, {"id": "author-ahmedkelmagarmid", "kind": "author", "title": "Ahmed K. Elmagarmid", "shortTitle": "Ahmed K. Elmagarmid", "subtitle": "", "detailBody": "研究领域: N/A", "properties": {"name": "Ahmed K. Elmagarmid", "affiliation": null, "researchArea": null}}, {"id": "author-aichengwu", "kind": "author", "title": "Aicheng Wu", "shortTitle": "Aicheng Wu", "subtitle": "", "detailBody": "研究领域: N/A", "properties": {"name": "Aicheng Wu", "affiliation": null, "researchArea": null}}, {"id": "author-alanfsmeaton", "kind": "author", "title": "Alan F. Smeaton", "shortTitle": "Alan F. Smeaton", "subtitle": "复旦大学", "detailBody": "研究领域: N/A", "properties": {"name": "Alan F. Smeaton", "affiliation": "复旦大学", "researchArea": null}}, {"id": "author-alexanderghauptmann", "kind": "author", "title": "Alexander G. Hauptmann", "shortTitle": "Alexander G. Hauptmann", "subtitle": "", "detailBody": "研究领域: N/A", "properties": {"name": "Alexander G. Hauptmann", "affiliation": null, "researchArea": null}}, {"id": "author-annchristinecatlin", "kind": "author", "title": "Ann Christine Catlin", "shortTitle": "Ann Christine Catlin", "subtitle": "", "detailBody": "研究领域: N/A", "properties": {"name": "Ann Christine Catlin", "affiliation": null, "researchArea": null}}, {"id": "author-arjenpdevries", "kind": "author", "title": "Arjen P. de Vries", "shortTitle": "Arjen P. de Vries", "subtitle": "", "detailBody": "研究领域: N/A", "properties": {"name": "Arjen P. de Vries", "affiliation": null, "researchArea": null}}, {"id": "author-cashcostello", "kind": "author", "title": "Cash Costello", "shortTitle": "Cash Costello", "subtitle": "", "detailBody": "研究领域: N/A", "properties": {"name": "Cash Costello", "affiliation": null, "researchArea": null}}, {"id": "author-changninghuang", "kind": "author", "title": "Changning Huang", "shortTitle": "Changning Huang", "subtitle": "", "detailBody": "研究领域: N/A", "properties": {"name": "Changning Huang", "affiliation": null, "researchArea": null}}, {"id": "author-changyongwu", "kind": "author", "title": "Changyong Wu", "shortTitle": "Changyong Wu", "subtitle": "", "detailBody": "研究领域: N/A", "properties": {"name": "Changyong Wu", "affiliation": null, "researchArea": null}}, {"id": "author-chaoshen", "kind": "author", "title": "Chao Shen", "shortTitle": "Chao Shen", "subtitle": "复旦大学", "detailBody": "研究领域: N/A", "properties": {"name": "Chao Shen", "affiliation": "复旦大学", "researchArea": null}}, {"id": "author-chunhuihu", "kind": "author", "title": "Chunhui Hu", "shortTitle": "Chunhui Hu", "subtitle": "", "detailBody": "研究领域: N/A", "properties": {"name": "Chunhui Hu", "affiliation": null, "researchArea": null}}, {"id": "author-davidsdoermann", "kind": "author", "title": "David S. Doermann", "shortTitle": "David S. Doermann", "subtitle": "", "detailBody": "研究领域: N/A", "properties": {"name": "David S. Doermann", "affiliation": null, "researchArea": null}}, {"id": "author-fanmingli", "kind": "author", "title": "Fanming Li", "shortTitle": "Fanming Li", "subtitle": "", "detailBody": "研究领域: N/A", "properties": {"name": "Fanming Li", "affiliation": null, "researchArea": null}}, {"id": "author-feiliu", "kind": "author", "title": "Fei Liu", "shortTitle": "Fei Liu", "subtitle": "", "detailBody": "研究领域: N/A", "properties": {"name": "Fei Liu", "affiliation": null, "researchArea": null}}, {"id": "author-fuliangweng", "kind": "author", "title": "Fuliang Weng", "shortTitle": "Fuliang Weng", "subtitle": "复旦大学", "detailBody": "研究领域: N/A", "properties": {"name": "Fuliang Weng", "affiliation": "复旦大学", "researchArea": null}}, {"id": "author-fumihitonishino", "kind": "author", "title": "Fumihito Nishino", "shortTitle": "Fumihito Nishino", "subtitle": "", "detailBody": "研究领域: N/A", "properties": {"name": "Fumihito Nishino", "affiliation": null, "researchArea": null}}, {"id": "author-genfujita", "kind": "author", "title": "Gen Fujita", "shortTitle": "Gen Fujita", "subtitle": "", "detailBody": "研究领域: N/A", "properties": {"name": "Gen Fujita", "affiliation": null, "researchArea": null}}, {"id": "author-guoweixu", "kind": "author", "title": "Guowei Xu", "shortTitle": "Guowei Xu", "subtitle": "", "detailBody": "研究领域: N/A", "properties": {"name": "Guowei Xu", "affiliation": null, "researchArea": null}}, {"id": "author-hangzailuo", "kind": "author", "title": "Hangzai Luo", "shortTitle": "Hangzai Luo", "subtitle": "UNC-Charlotte, Charlotte, NC", "detailBody": "研究领域: N/A", "properties": {"name": "Hangzai Luo", "affiliation": "UNC-Charlotte, Charlotte, NC", "researchArea": null}}, {"id": "author-haowu", "kind": "author", "title": "Hao Wu", "shortTitle": "Hao Wu", "subtitle": "", "detailBody": "研究领域: N/A", "properties": {"name": "Hao Wu", "affiliation": null, "researchArea": null}}, {"id": "author-haoyu", "kind": "author", "title": "Hao Yu", "shortTitle": "Hao Yu", "subtitle": "", "detailBody": "研究领域: N/A", "properties": {"name": "Hao Yu", "affiliation": null, "researchArea": null}}, {"id": "author-haukeschmidt", "kind": "author", "title": "Hauke Schmidt", "shortTitle": "Hauke Schmidt", "subtitle": "", "detailBody": "研究领域: N/A", "properties": {"name": "Hauke Schmidt", "affiliation": null, "researchArea": null}}, {"id": "author-helenmeng", "kind": "author", "title": "Helen Meng", "shortTitle": "Helen Meng", "subtitle": "", "detailBody": "研究领域: N/A", "properties": {"name": "Helen Meng", "affiliation": null, "researchArea": null}}, {"id": "author-hiroyuliishizaki", "kind": "author", "title": "Hiroyuli Ishizaki", "shortTitle": "Hiroyuli Ishizaki", "subtitle": "", "detailBody": "研究领域: N/A", "properties": {"name": "Hiroyuli Ishizaki", "affiliation": null, "researchArea": null}}, {"id": "author-honglu", "kind": "author", "title": "Hong Lu", "shortTitle": "Hong Lu", "subtitle": "", "detailBody": "研究领域: N/A", "properties": {"name": "Hong Lu", "affiliation": null, "researchArea": null}}, {"id": "author-hongjiangzhang", "kind": "author", "title": "Hong-Jiang Zhang", "shortTitle": "Hong-Jiang Zhang", "subtitle": "", "detailBody": "研究领域: N/A", "properties": {"name": "Hong-Jiang Zhang", "affiliation": null, "researchArea": null}}, {"id": "author-isaoshirakawa", "kind": "author", "title": "Isao Shirakawa", "shortTitle": "Isao Shirakawa", "subtitle": "", "detailBody": "研究领域: N/A", "properties": {"name": "Isao Shirakawa", "affiliation": null, "researchArea": null}}, {"id": "author-jianhuang", "kind": "author", "title": "Jian Huang", "shortTitle": "Jian Huang", "subtitle": "复旦大学", "detailBody": "研究领域: N/A", "properties": {"name": "Jian Huang", "affiliation": "复旦大学", "researchArea": null}}, {"id": "author-jianfenggao", "kind": "author", "title": "Jianfeng Gao", "shortTitle": "Jianfeng Gao", "subtitle": "", "detailBody": "研究领域: N/A", "properties": {"name": "Jianfeng Gao", "affiliation": null, "researchArea": null}}, {"id": "author-jianminghu", "kind": "author", "title": "Jianming Hu", "shortTitle": "Jianming Hu", "subtitle": "复旦大学", "detailBody": "研究领域: N/A", "properties": {"name": "Jianming Hu", "affiliation": "复旦大学", "researchArea": null}}, {"id": "author-jianpingfan", "kind": "author", "title": "Jianping Fan", "shortTitle": "Jianping Fan", "subtitle": "UNC-Charlotte, Charlotte, NC", "detailBody": "研究领域: N/A", "properties": {"name": "Jianping Fan", "affiliation": "UNC-Charlotte, Charlotte, NC", "researchArea": null}}, {"id": "author-jiaweirong", "kind": "author", "title": "Jiawei Rong", "shortTitle": "Jiawei Rong", "subtitle": "复旦大学", "detailBody": "研究领域: N/A", "properties": {"name": "Jiawei Rong", "affiliation": "复旦大学", "researchArea": null}}, {"id": "author-jiayinge", "kind": "author", "title": "Jiayin Ge", "shortTitle": "Jiayin Ge", "subtitle": "", "detailBody": "研究领域: N/A", "properties": {"name": "Jiayin Ge", "affiliation": null, "researchArea": null}}, {"id": "author-jiexi", "kind": "author", "title": "Jie Xi", "shortTitle": "Jie Xi", "subtitle": "复旦大学", "detailBody": "研究领域: N/A", "properties": {"name": "Jie Xi", "affiliation": "复旦大学", "researchArea": null}}, {"id": "author-jingxiao", "kind": "author", "title": "Jing Xiao", "shortTitle": "Jing Xiao", "subtitle": "UNC-Charlotte, Charlotte, NC", "detailBody": "研究领域: N/A", "properties": {"name": "Jing Xiao", "affiliation": "UNC-Charlotte, Charlotte, NC", "researchArea": null}}, {"id": "author-jingyuyang", "kind": "author", "title": "Jing-Yu Yang", "shortTitle": "Jing-Yu Yang", "subtitle": "", "detailBody": "研究领域: N/A", "properties": {"name": "Jing-Yu Yang", "affiliation": null, "researchArea": null}}, {"id": "author-johnrsmith", "kind": "author", "title": "John R. Smith", "shortTitle": "John R. Smith", "subtitle": "", "detailBody": "研究领域: N/A", "properties": {"name": "John R. Smith", "affiliation": null, "researchArea": null}}, {"id": "author-junwang", "kind": "author", "title": "Jun Wang", "shortTitle": "Jun Wang", "subtitle": "", "detailBody": "研究领域: N/A", "properties": {"name": "Jun Wang", "affiliation": null, "researchArea": null}}, {"id": "author-junyu", "kind": "author", "title": "Jun Yu", "shortTitle": "Jun Yu", "subtitle": "", "detailBody": "研究领域: N/A", "properties": {"name": "Jun Yu", "affiliation": null, "researchArea": null}}, {"id": "author-junkuocao", "kind": "author", "title": "Junkuo Cao", "shortTitle": "Junkuo Cao", "subtitle": "复旦大学", "detailBody": "研究领域: N/A", "properties": {"name": "Junkuo Cao", "affiliation": "复旦大学", "researchArea": null}}, {"id": "author-kaikaishen", "kind": "author", "title": "Kaikai Shen", "shortTitle": "Kaikai Shen", "subtitle": "复旦大学", "detailBody": "研究领域: N/A", "properties": {"name": "Kaikai Shen", "affiliation": "复旦大学", "researchArea": null}}, {"id": "author-kayvannajarian", "kind": "author", "title": "Kayvan Najarian", "shortTitle": "Kayvan Najarian", "subtitle": "", "detailBody": "研究领域: N/A", "properties": {"name": "Kayvan Najarian", "affiliation": null, "researchArea": null}}, {"id": "author-lanyou", "kind": "author", "title": "Lan You", "shortTitle": "Lan You", "subtitle": "复旦大学", "detailBody": "研究领域: N/A", "properties": {"name": "Lan You", "affiliation": "复旦大学", "researchArea": null}}, {"id": "author-linzhao", "kind": "author", "title": "Lin Zhao", "shortTitle": "Lin Zhao", "subtitle": "复旦大学", "detailBody": "研究领域: N/A", "properties": {"name": "Lin Zhao", "affiliation": "复旦大学", "researchArea": null}}, {"id": "author-liuwenyin", "kind": "author", "title": "Liu Wenyin", "shortTitle": "Liu Wenyin", "subtitle": "", "detailBody": "研究领域: N/A", "properties": {"name": "Liu Wenyin", "affiliation": null, "researchArea": null}}, {"id": "author-markerorvig", "kind": "author", "title": "Mark E. Rorvig", "shortTitle": "Mark E. Rorvig", "subtitle": "", "detailBody": "研究领域: N/A", "properties": {"name": "Mark E. Rorvig", "affiliation": null, "researchArea": null}}, {"id": "author-mengjingjiang", "kind": "author", "title": "Mengjing Jiang", "shortTitle": "Mengjing Jiang", "subtitle": "Fudan University, Shanghai, China", "detailBody": "研究领域: N/A", "properties": {"name": "Mengjing Jiang", "affiliation": "Fudan University, Shanghai, China", "researchArea": null}}, {"id": "author-nongyu", "kind": "author", "title": "Nong Yu", "shortTitle": "Nong Yu", "subtitle": "复旦大学", "detailBody": "研究领域: N/A", "properties": {"name": "Nong Yu", "affiliation": "复旦大学", "researchArea": null}}, {"id": "author-paulover", "kind": "author", "title": "Paul Over", "shortTitle": "Paul Over", "subtitle": "", "detailBody": "研究领域: N/A", "properties": {"name": "Paul Over", "affiliation": null, "researchArea": null}}, {"id": "author-peizhonglu", "kind": "author", "title": "Peizhong Lu", "shortTitle": "Peizhong Lu", "subtitle": "复旦大学", "detailBody": "研究领域: N/A", "properties": {"name": "Peizhong Lu", "affiliation": "复旦大学", "researchArea": null}}, {"id": "author-qilu", "kind": "author", "title": "Qi Lu", "shortTitle": "Qi Lu", "subtitle": "", "detailBody": "研究领域: N/A", "properties": {"name": "Qi Lu", "affiliation": null, "researchArea": null}}, {"id": "author-qizhang", "kind": "author", "title": "Qi Zhang", "shortTitle": "Qi Zhang", "subtitle": "Fudan University, Shanghai, China", "detailBody": "研究领域: N/A", "properties": {"name": "Qi Zhang", "affiliation": "Fudan University, Shanghai, China", "researchArea": null}}, {"id": "author-qianggu", "kind": "author", "title": "Qiang Gu", "shortTitle": "Qiang Gu", "subtitle": "", "detailBody": "研究领域: N/A", "properties": {"name": "Qiang Gu", "affiliation": null, "researchArea": null}}, {"id": "author-rongrongwang", "kind": "author", "title": "Rongrong Wang", "shortTitle": "Rongrong Wang", "subtitle": "复旦大学", "detailBody": "研究领域: N/A", "properties": {"name": "Rongrong Wang", "affiliation": "复旦大学", "researchArea": null}}, {"id": "author-shijinli", "kind": "author", "title": "Shijin Li", "shortTitle": "Shijin Li", "subtitle": "", "detailBody": "研究领域: N/A", "properties": {"name": "Shijin Li", "affiliation": null, "researchArea": null}}, {"id": "author-takaoonoye", "kind": "author", "title": "Takao Onoye", "shortTitle": "Takao Onoye", "subtitle": "", "detailBody": "研究领域: N/A", "properties": {"name": "Takao Onoye", "affiliation": null, "researchArea": null}}, {"id": "author-tingtingshu", "kind": "author", "title": "Ting-Ting Shu", "shortTitle": "Ting-Ting Shu", "subtitle": "", "detailBody": "研究领域: N/A", "properties": {"name": "Ting-Ting Shu", "affiliation": null, "researchArea": null}}, {"id": "author-walidgaref", "kind": "author", "title": "Walid G. Aref", "shortTitle": "Walid G. Aref", "subtitle": "", "detailBody": "研究领域: N/A", "properties": {"name": "Walid G. Aref", "affiliation": null, "researchArea": null}}, {"id": "author-wangwenxin", "kind": "author", "title": "Wang Wen-xin", "shortTitle": "Wang Wen-xin", "subtitle": "", "detailBody": "研究领域: N/A", "properties": {"name": "Wang Wen-xin", "affiliation": null, "researchArea": null}}, {"id": "author-wanjunjin", "kind": "author", "title": "Wanjun Jin", "shortTitle": "Wanjun Jin", "subtitle": "复旦大学", "detailBody": "研究领域: N/A", "properties": {"name": "Wanjun Jin", "affiliation": "复旦大学", "researchArea": null}}, {"id": "author-xianqian", "kind": "author", "title": "Xian Qian", "shortTitle": "Xian Qian", "subtitle": "Fudan University, Shanghai, P.R.China", "detailBody": "研究领域: N/A", "properties": {"name": "Xian Qian", "affiliation": "Fudan University, Shanghai, P.R.China", "researchArea": null}}, {"id": "author-xiangyangxue", "kind": "author", "title": "Xiangyang Xue", "shortTitle": "Xiangyang Xue", "subtitle": "复旦大学", "detailBody": "研究领域: N/A", "properties": {"name": "Xiangyang Xue", "affiliation": "复旦大学", "researchArea": null}}, {"id": "author-xiaoqianjiang", "kind": "author", "title": "Xiaoqian Jiang", "shortTitle": "Xiaoqian Jiang", "subtitle": "Carnegie Mellon University, Pittsburgh, PA", "detailBody": "研究领域: N/A", "properties": {"name": "Xiaoqian Jiang", "affiliation": "Carnegie Mellon University, Pittsburgh, PA", "researchArea": null}}, {"id": "author-xiaoyelu", "kind": "author", "title": "Xiaoye Lu", "shortTitle": "Xiaoye Lu", "subtitle": "复旦大学", "detailBody": "研究领域: N/A", "properties": {"name": "Xiaoye Lu", "affiliation": "复旦大学", "researchArea": null}}, {"id": "author-xinli", "kind": "author", "title": "Xin Li", "shortTitle": "Xin Li", "subtitle": "复旦大学", "detailBody": "研究领域: N/A", "properties": {"name": "Xin Li", "affiliation": "复旦大学", "researchArea": null}}, {"id": "author-xindongwu", "kind": "author", "title": "Xindong Wu", "shortTitle": "Xindong Wu", "subtitle": "", "detailBody": "研究领域: N/A", "properties": {"name": "Xindong Wu", "affiliation": null, "researchArea": null}}, {"id": "author-xingquanzhu", "kind": "author", "title": "Xingquan Zhu", "shortTitle": "Xingquan Zhu", "subtitle": "复旦大学", "detailBody": "研究领域: N/A", "properties": {"name": "Xingquan Zhu", "affiliation": "复旦大学", "researchArea": null}}, {"id": "author-xipengqiu", "kind": "author", "title": "Xipeng Qiu", "shortTitle": "Xipeng Qiu", "subtitle": "Media Computing &amp; Web Intelligence Lab, Department of Computer Science and Engineering, Fudan University, No. 220, Handan Road, Shanghai, 200433, P. R. China", "detailBody": "研究领域: N/A", "properties": {"name": "Xipeng Qiu", "affiliation": "Media Computing &amp; Web Intelligence Lab, Department of Computer Science and Engineering, Fudan University, No. 220, Handan Road, Shanghai, 200433, P. R. China", "researchArea": null}}, {"id": "author-xuanjinghuang", "kind": "author", "title": "Xuanjing Huang", "shortTitle": "Xuanjing Huang", "subtitle": "Fudan University, Shanghai, China", "detailBody": "研究领域: N/A", "properties": {"name": "Xuanjing Huang", "affiliation": "Fudan University, Shanghai, China", "researchArea": null}}, {"id": "author-xueqingchen", "kind": "author", "title": "Xueqing Chen", "shortTitle": "Xueqing Chen", "subtitle": "", "detailBody": "研究领域: N/A", "properties": {"name": "Xueqing Chen", "affiliation": null, "researchArea": null}}, {"id": "author-yangshi", "kind": "author", "title": "Yang Shi", "shortTitle": "Yang Shi", "subtitle": "Fundan University, Shanghai, China", "detailBody": "研究领域: N/A", "properties": {"name": "Yang Shi", "affiliation": "Fundan University, Shanghai, China", "researchArea": null}}, {"id": "author-yaqianzhou", "kind": "author", "title": "Yaqian Zhou", "shortTitle": "Yaqian Zhou", "subtitle": "Fudan University, Shanghai, China", "detailBody": "研究领域: N/A", "properties": {"name": "Yaqian Zhou", "affiliation": "Fudan University, Shanghai, China", "researchArea": null}}, {"id": "author-yikunguo", "kind": "author", "title": "Yikun Guo", "shortTitle": "Yikun Guo", "subtitle": "复旦大学", "detailBody": "研究领域: N/A", "properties": {"name": "Yikun Guo", "affiliation": "复旦大学", "researchArea": null}}, {"id": "author-yongchangji", "kind": "author", "title": "Yongchang Ji", "shortTitle": "Yongchang Ji", "subtitle": "", "detailBody": "研究领域: N/A", "properties": {"name": "Yongchang Ji", "affiliation": null, "researchArea": null}}, {"id": "author-yongpingdu", "kind": "author", "title": "Yongping Du", "shortTitle": "Yongping Du", "subtitle": "复旦大学", "detailBody": "研究领域: N/A", "properties": {"name": "Yongping Du", "affiliation": "复旦大学", "researchArea": null}}, {"id": "author-youdongmiao", "kind": "author", "title": "Youdong Miao", "shortTitle": "Youdong Miao", "subtitle": "", "detailBody": "研究领域: N/A", "properties": {"name": "Youdong Miao", "affiliation": null, "researchArea": null}}, {"id": "author-yuanbinwu", "kind": "author", "title": "Yuanbin Wu", "shortTitle": "Yuanbin Wu", "subtitle": "Fudan University, Shanghai, China", "detailBody": "研究领域: N/A", "properties": {"name": "Yuanbin Wu", "affiliation": "Fudan University, Shanghai, China", "researchArea": null}}, {"id": "author-yuefeiguo", "kind": "author", "title": "Yue-Fei Guo", "shortTitle": "Yue-Fei Guo", "subtitle": "复旦大学", "detailBody": "研究领域: N/A", "properties": {"name": "Yue-Fei Guo", "affiliation": "复旦大学", "researchArea": null}}, {"id": "author-yufeima", "kind": "author", "title": "Yufei Ma", "shortTitle": "Yufei Ma", "subtitle": "", "detailBody": "研究领域: N/A", "properties": {"name": "Yufei Ma", "affiliation": null, "researchArea": null}}, {"id": "author-zhaohuixie", "kind": "author", "title": "Zhaohui Xie", "shortTitle": "Zhaohui Xie", "subtitle": "复旦大学", "detailBody": "研究领域: N/A", "properties": {"name": "Zhaohui Xie", "affiliation": "复旦大学", "researchArea": null}}, {"id": "author-zhefeng", "kind": "author", "title": "Zhe Feng", "shortTitle": "Zhe Feng", "subtitle": "复旦大学", "detailBody": "研究领域: N/A", "properties": {"name": "Zhe Feng", "affiliation": "复旦大学", "researchArea": null}}, {"id": "author-zhongchaofei", "kind": "author", "title": "Zhongchao Fei", "shortTitle": "Zhongchao Fei", "subtitle": "复旦大学", "detailBody": "研究领域: N/A", "properties": {"name": "Zhongchao Fei", "affiliation": "复旦大学", "researchArea": null}}, {"id": "author-zhongquanwu", "kind": "author", "title": "Zhongquan Wu", "shortTitle": "Zhongquan Wu", "subtitle": "复旦大学", "detailBody": "研究领域: N/A", "properties": {"name": "Zhongquan Wu", "affiliation": "复旦大学", "researchArea": null}}, {"id": "author-zhushuozhang", "kind": "author", "title": "Zhushuo Zhang", "shortTitle": "Zhushuo Zhang", "subtitle": "复旦大学", "detailBody": "研究领域: N/A", "properties": {"name": "Zhushuo Zhang", "affiliation": "复旦大学", "researchArea": null}}, {"id": "author-zonggeli", "kind": "author", "title": "Zongge Li", "shortTitle": "Zongge Li", "subtitle": "", "detailBody": "研究领域: N/A", "properties": {"name": "Zongge Li", "affiliation": null, "researchArea": null}}], "edges": [{"id": "edge:authored:author-4:paper-conf-cikm-ZhouZHW13", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-4", "end": "paper-conf-cikm-ZhouZHW13", "properties": {}}, {"id": "edge:authored:author-4:paper-conf-emnlp-WuZHW11", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-4", "end": "paper-conf-emnlp-WuZHW11", "properties": {}}, {"id": "edge:authored:author-4:paper-conf-coling-QianZHW10", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-4", "end": "paper-conf-coling-QianZHW10", "properties": {}}, {"id": "edge:authored:author-4:paper-conf-emnlp-QianZZHW10", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-4", "end": "paper-conf-emnlp-QianZZHW10", "properties": {}}, {"id": "edge:authored:author-4:paper-conf-www-ZhouJZHW10", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-4", "end": "paper-conf-www-ZhouJZHW10", "properties": {}}, {"id": "edge:authored:author-4:paper-conf-icmcs-QiuMW09", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-4", "end": "paper-conf-icmcs-QiuMW09", "properties": {}}, {"id": "edge:authored:author-4:paper-journals-prl-QiuW09", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-4", "end": "paper-journals-prl-QiuW09", "properties": {}}, {"id": "edge:authored:author-4:paper-conf-emnlp-WuZHW09", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-4", "end": "paper-conf-emnlp-WuZHW09", "properties": {}}, {"id": "edge:authored:author-4:paper-conf-icml-QianJZHW09", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-4", "end": "paper-conf-icml-QianJZHW09", "properties": {}}, {"id": "edge:authored:author-4:paper-conf-sigir-ZhangSHW09", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-4", "end": "paper-conf-sigir-ZhangSHW09", "properties": {}}, {"id": "edge:authored:author-4:paper-journals-ipm-ZhaoWH09", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-4", "end": "paper-journals-ipm-ZhaoWH09", "properties": {}}, {"id": "edge:authored:author-4:paper-conf-ecai-ShenQHW08", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-4", "end": "paper-conf-ecai-ShenQHW08", "properties": {}}, {"id": "edge:authored:author-4:paper-conf-airs-ZhangQHW08", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-4", "end": "paper-conf-airs-ZhangQHW08", "properties": {}}, {"id": "edge:authored:author-4:paper-conf-airs-ZhangZHW08", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-4", "end": "paper-conf-airs-ZhangZHW08", "properties": {}}, {"id": "edge:authored:author-4:paper-journals-ijcpol-ZhangHW08", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-4", "end": "paper-journals-ijcpol-ZhangHW08", "properties": {}}, {"id": "edge:authored:author-4:paper-conf-airs-CaoWHZL08", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-4", "end": "paper-conf-airs-CaoWHZL08", "properties": {}}, {"id": "edge:authored:author-4:paper-journals-ijon-QiuW07", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-4", "end": "paper-journals-ijon-QiuW07", "properties": {}}, {"id": "edge:authored:author-4:paper-conf-paclic-FeiHW06", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-4", "end": "paper-conf-paclic-FeiHW06", "properties": {}}, {"id": "edge:authored:author-4:paper-journals-ijprai-QiuW06", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-4", "end": "paper-journals-ijprai-QiuW06", "properties": {}}, {"id": "edge:authored:author-4:paper-journals-pr-GuoWLFX06", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-4", "end": "paper-journals-pr-GuoWLFX06", "properties": {}}, {"id": "edge:authored:author-4:paper-conf-ijcnlp-ZhangZHW05", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-4", "end": "paper-conf-ijcnlp-ZhangZHW05", "properties": {}}, {"id": "edge:authored:author-4:paper-conf-iccv-QiuW05", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-4", "end": "paper-conf-iccv-QiuW05", "properties": {}}, {"id": "edge:authored:author-4:paper-journals-corr-abs-cs-0509072", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-4", "end": "paper-journals-corr-abs-cs-0509072", "properties": {}}, {"id": "edge:authored:author-4:paper-conf-mmm-RongMW05", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-4", "end": "paper-conf-mmm-RongMW05", "properties": {}}, {"id": "edge:authored:author-4:paper-journals-tmm-ZhuEXWC05", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-4", "end": "paper-journals-tmm-ZhuEXWC05", "properties": {}}, {"id": "edge:authored:author-4:paper-conf-icip-QiuW05", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-4", "end": "paper-conf-icip-QiuW05", "properties": {}}, {"id": "edge:authored:author-4:paper-conf-icip-QiuW05a", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-4", "end": "paper-conf-icip-QiuW05a", "properties": {}}, {"id": "edge:authored:author-4:paper-conf-ijcnlp-LiHW05", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-4", "end": "paper-conf-ijcnlp-LiHW05", "properties": {}}, {"id": "edge:authored:author-4:paper-conf-ijcai-QiuW05", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-4", "end": "paper-conf-ijcai-QiuW05", "properties": {}}, {"id": "edge:authored:author-4:paper-conf-naacl-DuMHW05", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-4", "end": "paper-conf-naacl-DuMHW05", "properties": {}}, {"id": "edge:authored:author-4:paper-conf-ijcnlp-ZhouHGW05", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-4", "end": "paper-conf-ijcnlp-ZhouHGW05", "properties": {}}, {"id": "edge:authored:author-4:paper-journals-tkde-ZhuWEFW05", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-4", "end": "paper-journals-tkde-ZhuWEFW05", "properties": {}}, {"id": "edge:authored:author-4:paper-conf-ijcnlp-DuHLW04", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-4", "end": "paper-conf-ijcnlp-DuHLW04", "properties": {}}, {"id": "edge:authored:author-4:paper-conf-icpr-WangJW04", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-4", "end": "paper-conf-icpr-WangJW04", "properties": {}}, {"id": "edge:authored:author-4:paper-conf-ijcnlp-YouDGHW04", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-4", "end": "paper-conf-ijcnlp-YouDGHW04", "properties": {}}, {"id": "edge:authored:author-4:paper-conf-icmcs-QiuFW04", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-4", "end": "paper-conf-icmcs-QiuFW04", "properties": {}}, {"id": "edge:authored:author-4:paper-journals-tmm-FanEZAW04", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-4", "end": "paper-journals-tmm-FanEZAW04", "properties": {}}, {"id": "edge:authored:author-4:paper-conf-isnn-YouHWYWN04", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-4", "end": "paper-conf-isnn-YouHWYWN04", "properties": {}}, {"id": "edge:authored:author-4:paper-conf-icadl-HuangHW04", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-4", "end": "paper-conf-icadl-HuangHW04", "properties": {}}, {"id": "edge:authored:author-4:paper-conf-icmcs-RongJW04", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-4", "end": "paper-conf-icmcs-RongJW04", "properties": {}}, {"id": "edge:authored:author-4:paper-conf-icmcs-JinWW04", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-4", "end": "paper-conf-icmcs-JinWW04", "properties": {}}, {"id": "edge:authored:author-4:paper-conf-jcdl-FanLXW04", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-4", "end": "paper-conf-jcdl-FanLXW04", "properties": {}}, {"id": "edge:authored:author-4:paper-conf-emnlp-ZhouWWS03", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-4", "end": "paper-conf-emnlp-ZhouWWS03", "properties": {}}, {"id": "edge:authored:author-4:paper-journals-prl-GuoLYSW03", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-4", "end": "paper-journals-prl-GuoLYSW03", "properties": {}}, {"id": "edge:authored:author-4:paper-journals-mta-FanZNW03", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-4", "end": "paper-journals-mta-FanZNW03", "properties": {}}, {"id": "edge:authored:author-4:paper-conf-icmcs-FengZWL03", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-4", "end": "paper-conf-icmcs-FengZWL03", "properties": {}}, {"id": "edge:authored:author-4:paper-journals-chinaf-YuWWLW03", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-4", "end": "paper-journals-chinaf-YuWWLW03", "properties": {}}, {"id": "edge:authored:author-4:paper-conf-icmcs-LuMZW02", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-4", "end": "paper-conf-icmcs-LuMZW02", "properties": {}}, {"id": "edge:authored:author-4:paper-journals-ijprai-HuXW02", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-4", "end": "paper-journals-ijprai-HuXW02", "properties": {}}, {"id": "edge:authored:author-4:paper-journals-pr-XiHW02", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-4", "end": "paper-journals-pr-XiHW02", "properties": {}}, {"id": "edge:authored:author-4:paper-conf-pcm-ZhuXFW02", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-4", "end": "paper-conf-pcm-ZhuXFW02", "properties": {}}, {"id": "edge:authored:author-4:paper-conf-pcm-ZhuFXWE02", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-4", "end": "paper-conf-pcm-ZhuFXWE02", "properties": {}}, {"id": "edge:authored:author-4:paper-conf-ercimdl-SmeatonOCVDHRSW02", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-4", "end": "paper-conf-ercimdl-SmeatonOCVDHRSW02", "properties": {}}, {"id": "edge:authored:author-4:paper-journals-tcsv-FanZW01", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-4", "end": "paper-journals-tcsv-FanZW01", "properties": {}}, {"id": "edge:authored:author-4:paper-journals-jvcir-FanJW01", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-4", "end": "paper-journals-jvcir-FanJW01", "properties": {}}, {"id": "edge:authored:author-4:paper-conf-pcm-ZhuWXLF01", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-4", "end": "paper-conf-pcm-ZhuWXLF01", "properties": {}}, {"id": "edge:authored:author-4:paper-conf-pcm-LuW01", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-4", "end": "paper-conf-pcm-LuW01", "properties": {}}, {"id": "edge:authored:author-4:paper-conf-iwpt-GuoWW01", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-4", "end": "paper-conf-iwpt-GuoWW01", "properties": {}}, {"id": "edge:authored:author-4:paper-conf-nlprs-HuangWGI01", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-4", "end": "paper-conf-nlprs-HuangWGI01", "properties": {}}, {"id": "edge:authored:author-4:paper-journals-jei-ZhuZWHW01", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-4", "end": "paper-journals-jei-ZhuZWHW01", "properties": {}}, {"id": "edge:authored:author-4:paper-conf-pris-XiHW01", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-4", "end": "paper-conf-pris-XiHW01", "properties": {}}, {"id": "edge:authored:author-4:paper-conf-pcm-FanZW01", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-4", "end": "paper-conf-pcm-FanZW01", "properties": {}}, {"id": "edge:authored:author-4:paper-journals-spic-FanYFOWS01", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-4", "end": "paper-journals-spic-FanYFOWS01", "properties": {}}, {"id": "edge:authored:author-4:paper-conf-spieSR-XueLW00", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-4", "end": "paper-conf-spieSR-XueLW00", "properties": {}}, {"id": "edge:authored:author-4:paper-conf-isspa-XueLCW99", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-4", "end": "paper-conf-isspa-XueLCW99", "properties": {}}, {"id": "edge:authored:author-4:paper-conf-acl-vlc-HuangWW97", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-4", "end": "paper-conf-acl-vlc-HuangWW97", "properties": {}}, {"id": "edge:authored:author-4:paper-journals-cviu-WuWW95", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-4", "end": "paper-journals-cviu-WuWW95", "properties": {}}, {"id": "edge:authored:author-4:paper-journals-pami-WuX90", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-4", "end": "paper-journals-pami-WuX90", "properties": {}}, {"id": "edge:authored:author-4:paper-conf-par-WengLWG88", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-4", "end": "paper-conf-par-WengLWG88", "properties": {}}, {"id": "edge:authored:author-4:paper-conf-icpr-WuX88", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-4", "end": "paper-conf-icpr-WuX88", "properties": {}}, {"id": "edge:authored:author-4:paper-conf-icpr-XieW88", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-4", "end": "paper-conf-icpr-XieW88", "properties": {}}, {"id": "edge:authored:author-ahmedkelmagarmid:paper-journals-tmm-ZhuEXWC05", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-ahmedkelmagarmid", "end": "paper-journals-tmm-ZhuEXWC05", "properties": {}}, {"id": "edge:authored:author-ahmedkelmagarmid:paper-journals-tkde-ZhuWEFW05", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-ahmedkelmagarmid", "end": "paper-journals-tkde-ZhuWEFW05", "properties": {}}, {"id": "edge:authored:author-ahmedkelmagarmid:paper-journals-tmm-FanEZAW04", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-ahmedkelmagarmid", "end": "paper-journals-tmm-FanEZAW04", "properties": {}}, {"id": "edge:authored:author-ahmedkelmagarmid:paper-conf-pcm-ZhuFXWE02", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-ahmedkelmagarmid", "end": "paper-conf-pcm-ZhuFXWE02", "properties": {}}, {"id": "edge:authored:author-aichengwu:paper-journals-cviu-WuWW95", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-aichengwu", "end": "paper-journals-cviu-WuWW95", "properties": {}}, {"id": "edge:authored:author-alanfsmeaton:paper-conf-ercimdl-SmeatonOCVDHRSW02", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-alanfsmeaton", "end": "paper-conf-ercimdl-SmeatonOCVDHRSW02", "properties": {}}, {"id": "edge:authored:author-alexanderghauptmann:paper-conf-ercimdl-SmeatonOCVDHRSW02", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-alexanderghauptmann", "end": "paper-conf-ercimdl-SmeatonOCVDHRSW02", "properties": {}}, {"id": "edge:authored:author-annchristinecatlin:paper-journals-tmm-ZhuEXWC05", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-annchristinecatlin", "end": "paper-journals-tmm-ZhuEXWC05", "properties": {}}, {"id": "edge:authored:author-arjenpdevries:paper-conf-ercimdl-SmeatonOCVDHRSW02", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-arjenpdevries", "end": "paper-conf-ercimdl-SmeatonOCVDHRSW02", "properties": {}}, {"id": "edge:authored:author-cashcostello:paper-conf-ercimdl-SmeatonOCVDHRSW02", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-cashcostello", "end": "paper-conf-ercimdl-SmeatonOCVDHRSW02", "properties": {}}, {"id": "edge:authored:author-changninghuang:paper-conf-ijcnlp-ZhouHGW05", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-changninghuang", "end": "paper-conf-ijcnlp-ZhouHGW05", "properties": {}}, {"id": "edge:authored:author-changyongwu:paper-journals-chinaf-YuWWLW03", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-changyongwu", "end": "paper-journals-chinaf-YuWWLW03", "properties": {}}, {"id": "edge:authored:author-chaoshen:paper-conf-ecai-ShenQHW08", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-chaoshen", "end": "paper-conf-ecai-ShenQHW08", "properties": {}}, {"id": "edge:authored:author-chunhuihu:paper-journals-jei-ZhuZWHW01", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-chunhuihu", "end": "paper-journals-jei-ZhuZWHW01", "properties": {}}, {"id": "edge:authored:author-davidsdoermann:paper-conf-ercimdl-SmeatonOCVDHRSW02", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-davidsdoermann", "end": "paper-conf-ercimdl-SmeatonOCVDHRSW02", "properties": {}}, {"id": "edge:authored:author-fanmingli:paper-journals-chinaf-YuWWLW03", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-fanmingli", "end": "paper-journals-chinaf-YuWWLW03", "properties": {}}, {"id": "edge:authored:author-feiliu:paper-conf-airs-CaoWHZL08", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-feiliu", "end": "paper-conf-airs-CaoWHZL08", "properties": {}}, {"id": "edge:authored:author-fuliangweng:paper-conf-emnlp-ZhouWWS03", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-fuliangweng", "end": "paper-conf-emnlp-ZhouWWS03", "properties": {}}, {"id": "edge:authored:author-fuliangweng:paper-conf-iwpt-GuoWW01", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-fuliangweng", "end": "paper-conf-iwpt-GuoWW01", "properties": {}}, {"id": "edge:authored:author-fuliangweng:paper-conf-par-WengLWG88", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-fuliangweng", "end": "paper-conf-par-WengLWG88", "properties": {}}, {"id": "edge:authored:author-fumihitonishino:paper-conf-isnn-YouHWYWN04", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-fumihitonishino", "end": "paper-conf-isnn-YouHWYWN04", "properties": {}}, {"id": "edge:authored:author-genfujita:paper-journals-spic-FanYFOWS01", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-genfujita", "end": "paper-journals-spic-FanYFOWS01", "properties": {}}, {"id": "edge:authored:author-guoweixu:paper-conf-nlprs-HuangWGI01", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-guoweixu", "end": "paper-conf-nlprs-HuangWGI01", "properties": {}}, {"id": "edge:authored:author-hangzailuo:paper-conf-jcdl-FanLXW04", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-hangzailuo", "end": "paper-conf-jcdl-FanLXW04", "properties": {}}, {"id": "edge:authored:author-hangzailuo:paper-conf-spieSR-XueLW00", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-hangzailuo", "end": "paper-conf-spieSR-XueLW00", "properties": {}}, {"id": "edge:authored:author-hangzailuo:paper-conf-isspa-XueLCW99", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-hangzailuo", "end": "paper-conf-isspa-XueLCW99", "properties": {}}, {"id": "edge:authored:author-haowu:paper-journals-chinaf-YuWWLW03", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-haowu", "end": "paper-journals-chinaf-YuWWLW03", "properties": {}}, {"id": "edge:authored:author-haoyu:paper-conf-isnn-YouHWYWN04", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-haoyu", "end": "paper-conf-isnn-YouHWYWN04", "properties": {}}, {"id": "edge:authored:author-haukeschmidt:paper-conf-emnlp-ZhouWWS03", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-haukeschmidt", "end": "paper-conf-emnlp-ZhouWWS03", "properties": {}}, {"id": "edge:authored:author-helenmeng:paper-conf-naacl-DuMHW05", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-helenmeng", "end": "paper-conf-naacl-DuMHW05", "properties": {}}, {"id": "edge:authored:author-hiroyuliishizaki:paper-conf-nlprs-HuangWGI01", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-hiroyuliishizaki", "end": "paper-conf-nlprs-HuangWGI01", "properties": {}}, {"id": "edge:authored:author-honglu:paper-journals-pr-GuoWLFX06", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-honglu", "end": "paper-journals-pr-GuoWLFX06", "properties": {}}, {"id": "edge:authored:author-hongjiangzhang:paper-conf-icmcs-LuMZW02", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-hongjiangzhang", "end": "paper-conf-icmcs-LuMZW02", "properties": {}}, {"id": "edge:authored:author-hongjiangzhang:paper-journals-jei-ZhuZWHW01", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-hongjiangzhang", "end": "paper-journals-jei-ZhuZWHW01", "properties": {}}, {"id": "edge:authored:author-isaoshirakawa:paper-journals-spic-FanYFOWS01", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-isaoshirakawa", "end": "paper-journals-spic-FanYFOWS01", "properties": {}}, {"id": "edge:authored:author-jianhuang:paper-conf-icadl-HuangHW04", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-jianhuang", "end": "paper-conf-icadl-HuangHW04", "properties": {}}, {"id": "edge:authored:author-jianfenggao:paper-conf-ijcnlp-ZhouHGW05", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-jianfenggao", "end": "paper-conf-ijcnlp-ZhouHGW05", "properties": {}}, {"id": "edge:authored:author-jianminghu:paper-journals-ijprai-HuXW02", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-jianminghu", "end": "paper-journals-ijprai-HuXW02", "properties": {}}, {"id": "edge:authored:author-jianminghu:paper-journals-pr-XiHW02", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-jianminghu", "end": "paper-journals-pr-XiHW02", "properties": {}}, {"id": "edge:authored:author-jianminghu:paper-conf-pris-XiHW01", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-jianminghu", "end": "paper-conf-pris-XiHW01", "properties": {}}, {"id": "edge:authored:author-jianpingfan:paper-journals-tmm-FanEZAW04", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-jianpingfan", "end": "paper-journals-tmm-FanEZAW04", "properties": {}}, {"id": "edge:authored:author-jianpingfan:paper-conf-jcdl-FanLXW04", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-jianpingfan", "end": "paper-conf-jcdl-FanLXW04", "properties": {}}, {"id": "edge:authored:author-jianpingfan:paper-journals-mta-FanZNW03", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-jianpingfan", "end": "paper-journals-mta-FanZNW03", "properties": {}}, {"id": "edge:authored:author-jianpingfan:paper-conf-pcm-ZhuXFW02", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-jianpingfan", "end": "paper-conf-pcm-ZhuXFW02", "properties": {}}, {"id": "edge:authored:author-jianpingfan:paper-conf-pcm-ZhuFXWE02", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-jianpingfan", "end": "paper-conf-pcm-ZhuFXWE02", "properties": {}}, {"id": "edge:authored:author-jianpingfan:paper-journals-tcsv-FanZW01", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-jianpingfan", "end": "paper-journals-tcsv-FanZW01", "properties": {}}, {"id": "edge:authored:author-jianpingfan:paper-journals-jvcir-FanJW01", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-jianpingfan", "end": "paper-journals-jvcir-FanJW01", "properties": {}}, {"id": "edge:authored:author-jianpingfan:paper-conf-pcm-ZhuWXLF01", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-jianpingfan", "end": "paper-conf-pcm-ZhuWXLF01", "properties": {}}, {"id": "edge:authored:author-jianpingfan:paper-conf-pcm-FanZW01", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-jianpingfan", "end": "paper-conf-pcm-FanZW01", "properties": {}}, {"id": "edge:authored:author-jianpingfan:paper-journals-spic-FanYFOWS01", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-jianpingfan", "end": "paper-journals-spic-FanYFOWS01", "properties": {}}, {"id": "edge:authored:author-jiaweirong:paper-conf-mmm-RongMW05", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-jiaweirong", "end": "paper-conf-mmm-RongMW05", "properties": {}}, {"id": "edge:authored:author-jiaweirong:paper-conf-icmcs-RongJW04", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-jiaweirong", "end": "paper-conf-icmcs-RongJW04", "properties": {}}, {"id": "edge:authored:author-jiayinge:paper-conf-ijcnlp-YouDGHW04", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-jiayinge", "end": "paper-conf-ijcnlp-YouDGHW04", "properties": {}}, {"id": "edge:authored:author-jiexi:paper-journals-ijprai-HuXW02", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-jiexi", "end": "paper-journals-ijprai-HuXW02", "properties": {}}, {"id": "edge:authored:author-jiexi:paper-journals-pr-XiHW02", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-jiexi", "end": "paper-journals-pr-XiHW02", "properties": {}}, {"id": "edge:authored:author-jiexi:paper-conf-pris-XiHW01", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-jiexi", "end": "paper-conf-pris-XiHW01", "properties": {}}, {"id": "edge:authored:author-jingxiao:paper-conf-jcdl-FanLXW04", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-jingxiao", "end": "paper-conf-jcdl-FanLXW04", "properties": {}}, {"id": "edge:authored:author-jingyuyang:paper-journals-prl-GuoLYSW03", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-jingyuyang", "end": "paper-journals-prl-GuoLYSW03", "properties": {}}, {"id": "edge:authored:author-johnrsmith:paper-conf-ercimdl-SmeatonOCVDHRSW02", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-johnrsmith", "end": "paper-conf-ercimdl-SmeatonOCVDHRSW02", "properties": {}}, {"id": "edge:authored:author-junwang:paper-conf-isnn-YouHWYWN04", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-junwang", "end": "paper-conf-isnn-YouHWYWN04", "properties": {}}, {"id": "edge:authored:author-junyu:paper-journals-spic-FanYFOWS01", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-junyu", "end": "paper-journals-spic-FanYFOWS01", "properties": {}}, {"id": "edge:authored:author-junkuocao:paper-conf-airs-CaoWHZL08", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-junkuocao", "end": "paper-conf-airs-CaoWHZL08", "properties": {}}, {"id": "edge:authored:author-kaikaishen:paper-journals-corr-abs-cs-0509072", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-kaikaishen", "end": "paper-journals-corr-abs-cs-0509072", "properties": {}}, {"id": "edge:authored:author-kayvannajarian:paper-journals-mta-FanZNW03", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-kayvannajarian", "end": "paper-journals-mta-FanZNW03", "properties": {}}, {"id": "edge:authored:author-lanyou:paper-conf-ijcnlp-YouDGHW04", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-lanyou", "end": "paper-conf-ijcnlp-YouDGHW04", "properties": {}}, {"id": "edge:authored:author-lanyou:paper-conf-isnn-YouHWYWN04", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-lanyou", "end": "paper-conf-isnn-YouHWYWN04", "properties": {}}, {"id": "edge:authored:author-linzhao:paper-journals-ipm-ZhaoWH09", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-linzhao", "end": "paper-journals-ipm-ZhaoWH09", "properties": {}}, {"id": "edge:authored:author-liuwenyin:paper-journals-jei-ZhuZWHW01", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-liuwenyin", "end": "paper-journals-jei-ZhuZWHW01", "properties": {}}, {"id": "edge:authored:author-markerorvig:paper-conf-ercimdl-SmeatonOCVDHRSW02", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-markerorvig", "end": "paper-conf-ercimdl-SmeatonOCVDHRSW02", "properties": {}}, {"id": "edge:authored:author-mengjingjiang:paper-conf-www-ZhouJZHW10", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-mengjingjiang", "end": "paper-conf-www-ZhouJZHW10", "properties": {}}, {"id": "edge:authored:author-nongyu:paper-journals-chinaf-YuWWLW03", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-nongyu", "end": "paper-journals-chinaf-YuWWLW03", "properties": {}}, {"id": "edge:authored:author-paulover:paper-conf-ercimdl-SmeatonOCVDHRSW02", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-paulover", "end": "paper-conf-ercimdl-SmeatonOCVDHRSW02", "properties": {}}, {"id": "edge:authored:author-peizhonglu:paper-conf-pcm-LuW01", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-peizhonglu", "end": "paper-conf-pcm-LuW01", "properties": {}}, {"id": "edge:authored:author-qilu:paper-conf-par-WengLWG88", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-qilu", "end": "paper-conf-par-WengLWG88", "properties": {}}, {"id": "edge:authored:author-qizhang:paper-conf-cikm-ZhouZHW13", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-qizhang", "end": "paper-conf-cikm-ZhouZHW13", "properties": {}}, {"id": "edge:authored:author-qizhang:paper-conf-emnlp-WuZHW11", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-qizhang", "end": "paper-conf-emnlp-WuZHW11", "properties": {}}, {"id": "edge:authored:author-qizhang:paper-conf-coling-QianZHW10", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-qizhang", "end": "paper-conf-coling-QianZHW10", "properties": {}}, {"id": "edge:authored:author-qizhang:paper-conf-emnlp-QianZZHW10", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-qizhang", "end": "paper-conf-emnlp-QianZZHW10", "properties": {}}, {"id": "edge:authored:author-qizhang:paper-conf-www-ZhouJZHW10", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-qizhang", "end": "paper-conf-www-ZhouJZHW10", "properties": {}}, {"id": "edge:authored:author-qizhang:paper-conf-emnlp-WuZHW09", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-qizhang", "end": "paper-conf-emnlp-WuZHW09", "properties": {}}, {"id": "edge:authored:author-qizhang:paper-conf-icml-QianJZHW09", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-qizhang", "end": "paper-conf-icml-QianJZHW09", "properties": {}}, {"id": "edge:authored:author-qizhang:paper-conf-sigir-ZhangSHW09", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-qizhang", "end": "paper-conf-sigir-ZhangSHW09", "properties": {}}, {"id": "edge:authored:author-qizhang:paper-conf-airs-ZhangQHW08", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-qizhang", "end": "paper-conf-airs-ZhangQHW08", "properties": {}}, {"id": "edge:authored:author-qizhang:paper-conf-airs-ZhangZHW08", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-qizhang", "end": "paper-conf-airs-ZhangZHW08", "properties": {}}, {"id": "edge:authored:author-qizhang:paper-journals-ijcpol-ZhangHW08", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-qizhang", "end": "paper-journals-ijcpol-ZhangHW08", "properties": {}}, {"id": "edge:authored:author-qianggu:paper-conf-par-WengLWG88", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-qianggu", "end": "paper-conf-par-WengLWG88", "properties": {}}, {"id": "edge:authored:author-rongrongwang:paper-conf-icpr-WangJW04", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-rongrongwang", "end": "paper-conf-icpr-WangJW04", "properties": {}}, {"id": "edge:authored:author-rongrongwang:paper-conf-icmcs-JinWW04", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-rongrongwang", "end": "paper-conf-icmcs-JinWW04", "properties": {}}, {"id": "edge:authored:author-shijinli:paper-journals-prl-GuoLYSW03", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-shijinli", "end": "paper-journals-prl-GuoLYSW03", "properties": {}}, {"id": "edge:authored:author-takaoonoye:paper-journals-spic-FanYFOWS01", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-takaoonoye", "end": "paper-journals-spic-FanYFOWS01", "properties": {}}, {"id": "edge:authored:author-tingtingshu:paper-journals-prl-GuoLYSW03", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-tingtingshu", "end": "paper-journals-prl-GuoLYSW03", "properties": {}}, {"id": "edge:authored:author-walidgaref:paper-journals-tmm-FanEZAW04", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-walidgaref", "end": "paper-journals-tmm-FanEZAW04", "properties": {}}, {"id": "edge:authored:author-wangwenxin:paper-conf-acl-vlc-HuangWW97", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-wangwenxin", "end": "paper-conf-acl-vlc-HuangWW97", "properties": {}}, {"id": "edge:authored:author-wanjunjin:paper-conf-icpr-WangJW04", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-wanjunjin", "end": "paper-conf-icpr-WangJW04", "properties": {}}, {"id": "edge:authored:author-wanjunjin:paper-conf-icmcs-RongJW04", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-wanjunjin", "end": "paper-conf-icmcs-RongJW04", "properties": {}}, {"id": "edge:authored:author-wanjunjin:paper-conf-icmcs-JinWW04", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-wanjunjin", "end": "paper-conf-icmcs-JinWW04", "properties": {}}, {"id": "edge:authored:author-xianqian:paper-conf-coling-QianZHW10", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-xianqian", "end": "paper-conf-coling-QianZHW10", "properties": {}}, {"id": "edge:authored:author-xianqian:paper-conf-emnlp-QianZZHW10", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-xianqian", "end": "paper-conf-emnlp-QianZZHW10", "properties": {}}, {"id": "edge:authored:author-xianqian:paper-conf-icml-QianJZHW09", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-xianqian", "end": "paper-conf-icml-QianJZHW09", "properties": {}}, {"id": "edge:authored:author-xiangyangxue:paper-journals-pr-GuoWLFX06", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-xiangyangxue", "end": "paper-journals-pr-GuoWLFX06", "properties": {}}, {"id": "edge:authored:author-xiangyangxue:paper-journals-tmm-ZhuEXWC05", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-xiangyangxue", "end": "paper-journals-tmm-ZhuEXWC05", "properties": {}}, {"id": "edge:authored:author-xiangyangxue:paper-conf-pcm-ZhuXFW02", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-xiangyangxue", "end": "paper-conf-pcm-ZhuXFW02", "properties": {}}, {"id": "edge:authored:author-xiangyangxue:paper-conf-pcm-ZhuFXWE02", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-xiangyangxue", "end": "paper-conf-pcm-ZhuFXWE02", "properties": {}}, {"id": "edge:authored:author-xiangyangxue:paper-conf-pcm-ZhuWXLF01", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-xiangyangxue", "end": "paper-conf-pcm-ZhuWXLF01", "properties": {}}, {"id": "edge:authored:author-xiangyangxue:paper-conf-spieSR-XueLW00", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-xiangyangxue", "end": "paper-conf-spieSR-XueLW00", "properties": {}}, {"id": "edge:authored:author-xiangyangxue:paper-conf-isspa-XueLCW99", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-xiangyangxue", "end": "paper-conf-isspa-XueLCW99", "properties": {}}, {"id": "edge:authored:author-xiaoqianjiang:paper-conf-icml-QianJZHW09", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-xiaoqianjiang", "end": "paper-conf-icml-QianJZHW09", "properties": {}}, {"id": "edge:authored:author-xiaoyelu:paper-conf-icmcs-LuMZW02", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-xiaoyelu", "end": "paper-conf-icmcs-LuMZW02", "properties": {}}, {"id": "edge:authored:author-xiaoyelu:paper-conf-pcm-ZhuWXLF01", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-xiaoyelu", "end": "paper-conf-pcm-ZhuWXLF01", "properties": {}}, {"id": "edge:authored:author-xinli:paper-conf-ijcnlp-LiHW05", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-xinli", "end": "paper-conf-ijcnlp-LiHW05", "properties": {}}, {"id": "edge:authored:author-xinli:paper-conf-ijcnlp-DuHLW04", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-xinli", "end": "paper-conf-ijcnlp-DuHLW04", "properties": {}}, {"id": "edge:authored:author-xindongwu:paper-journals-tkde-ZhuWEFW05", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-xindongwu", "end": "paper-journals-tkde-ZhuWEFW05", "properties": {}}, {"id": "edge:authored:author-xingquanzhu:paper-journals-tmm-ZhuEXWC05", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-xingquanzhu", "end": "paper-journals-tmm-ZhuEXWC05", "properties": {}}, {"id": "edge:authored:author-xingquanzhu:paper-journals-tkde-ZhuWEFW05", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-xingquanzhu", "end": "paper-journals-tkde-ZhuWEFW05", "properties": {}}, {"id": "edge:authored:author-xingquanzhu:paper-journals-tmm-FanEZAW04", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-xingquanzhu", "end": "paper-journals-tmm-FanEZAW04", "properties": {}}, {"id": "edge:authored:author-xingquanzhu:paper-journals-mta-FanZNW03", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-xingquanzhu", "end": "paper-journals-mta-FanZNW03", "properties": {}}, {"id": "edge:authored:author-xingquanzhu:paper-conf-pcm-ZhuXFW02", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-xingquanzhu", "end": "paper-conf-pcm-ZhuXFW02", "properties": {}}, {"id": "edge:authored:author-xingquanzhu:paper-conf-pcm-ZhuFXWE02", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-xingquanzhu", "end": "paper-conf-pcm-ZhuFXWE02", "properties": {}}, {"id": "edge:authored:author-xingquanzhu:paper-journals-tcsv-FanZW01", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-xingquanzhu", "end": "paper-journals-tcsv-FanZW01", "properties": {}}, {"id": "edge:authored:author-xingquanzhu:paper-conf-pcm-ZhuWXLF01", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-xingquanzhu", "end": "paper-conf-pcm-ZhuWXLF01", "properties": {}}, {"id": "edge:authored:author-xingquanzhu:paper-journals-jei-ZhuZWHW01", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-xingquanzhu", "end": "paper-journals-jei-ZhuZWHW01", "properties": {}}, {"id": "edge:authored:author-xingquanzhu:paper-conf-pcm-FanZW01", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-xingquanzhu", "end": "paper-conf-pcm-FanZW01", "properties": {}}, {"id": "edge:authored:author-xipengqiu:paper-conf-icmcs-QiuMW09", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-xipengqiu", "end": "paper-conf-icmcs-QiuMW09", "properties": {}}, {"id": "edge:authored:author-xipengqiu:paper-journals-prl-QiuW09", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-xipengqiu", "end": "paper-journals-prl-QiuW09", "properties": {}}, {"id": "edge:authored:author-xipengqiu:paper-conf-ecai-ShenQHW08", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-xipengqiu", "end": "paper-conf-ecai-ShenQHW08", "properties": {}}, {"id": "edge:authored:author-xipengqiu:paper-conf-airs-ZhangQHW08", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-xipengqiu", "end": "paper-conf-airs-ZhangQHW08", "properties": {}}, {"id": "edge:authored:author-xipengqiu:paper-journals-ijon-QiuW07", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-xipengqiu", "end": "paper-journals-ijon-QiuW07", "properties": {}}, {"id": "edge:authored:author-xipengqiu:paper-journals-ijprai-QiuW06", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-xipengqiu", "end": "paper-journals-ijprai-QiuW06", "properties": {}}, {"id": "edge:authored:author-xipengqiu:paper-conf-iccv-QiuW05", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-xipengqiu", "end": "paper-conf-iccv-QiuW05", "properties": {}}, {"id": "edge:authored:author-xipengqiu:paper-conf-icip-QiuW05", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-xipengqiu", "end": "paper-conf-icip-QiuW05", "properties": {}}, {"id": "edge:authored:author-xipengqiu:paper-conf-icip-QiuW05a", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-xipengqiu", "end": "paper-conf-icip-QiuW05a", "properties": {}}, {"id": "edge:authored:author-xipengqiu:paper-conf-ijcai-QiuW05", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-xipengqiu", "end": "paper-conf-ijcai-QiuW05", "properties": {}}, {"id": "edge:authored:author-xipengqiu:paper-conf-icmcs-QiuFW04", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-xipengqiu", "end": "paper-conf-icmcs-QiuFW04", "properties": {}}, {"id": "edge:authored:author-xuanjinghuang:paper-conf-cikm-ZhouZHW13", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-xuanjinghuang", "end": "paper-conf-cikm-ZhouZHW13", "properties": {}}, {"id": "edge:authored:author-xuanjinghuang:paper-conf-emnlp-WuZHW11", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-xuanjinghuang", "end": "paper-conf-emnlp-WuZHW11", "properties": {}}, {"id": "edge:authored:author-xuanjinghuang:paper-conf-coling-QianZHW10", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-xuanjinghuang", "end": "paper-conf-coling-QianZHW10", "properties": {}}, {"id": "edge:authored:author-xuanjinghuang:paper-conf-emnlp-QianZZHW10", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-xuanjinghuang", "end": "paper-conf-emnlp-QianZZHW10", "properties": {}}, {"id": "edge:authored:author-xuanjinghuang:paper-conf-www-ZhouJZHW10", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-xuanjinghuang", "end": "paper-conf-www-ZhouJZHW10", "properties": {}}, {"id": "edge:authored:author-xuanjinghuang:paper-conf-emnlp-WuZHW09", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-xuanjinghuang", "end": "paper-conf-emnlp-WuZHW09", "properties": {}}, {"id": "edge:authored:author-xuanjinghuang:paper-conf-icml-QianJZHW09", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-xuanjinghuang", "end": "paper-conf-icml-QianJZHW09", "properties": {}}, {"id": "edge:authored:author-xuanjinghuang:paper-conf-sigir-ZhangSHW09", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-xuanjinghuang", "end": "paper-conf-sigir-ZhangSHW09", "properties": {}}, {"id": "edge:authored:author-xuanjinghuang:paper-journals-ipm-ZhaoWH09", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-xuanjinghuang", "end": "paper-journals-ipm-ZhaoWH09", "properties": {}}, {"id": "edge:authored:author-xuanjinghuang:paper-conf-ecai-ShenQHW08", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-xuanjinghuang", "end": "paper-conf-ecai-ShenQHW08", "properties": {}}, {"id": "edge:authored:author-xuanjinghuang:paper-conf-airs-ZhangQHW08", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-xuanjinghuang", "end": "paper-conf-airs-ZhangQHW08", "properties": {}}, {"id": "edge:authored:author-xuanjinghuang:paper-conf-airs-ZhangZHW08", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-xuanjinghuang", "end": "paper-conf-airs-ZhangZHW08", "properties": {}}, {"id": "edge:authored:author-xuanjinghuang:paper-journals-ijcpol-ZhangHW08", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-xuanjinghuang", "end": "paper-journals-ijcpol-ZhangHW08", "properties": {}}, {"id": "edge:authored:author-xuanjinghuang:paper-conf-airs-CaoWHZL08", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-xuanjinghuang", "end": "paper-conf-airs-CaoWHZL08", "properties": {}}, {"id": "edge:authored:author-xuanjinghuang:paper-conf-paclic-FeiHW06", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-xuanjinghuang", "end": "paper-conf-paclic-FeiHW06", "properties": {}}, {"id": "edge:authored:author-xuanjinghuang:paper-conf-ijcnlp-ZhangZHW05", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-xuanjinghuang", "end": "paper-conf-ijcnlp-ZhangZHW05", "properties": {}}, {"id": "edge:authored:author-xuanjinghuang:paper-conf-ijcnlp-LiHW05", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-xuanjinghuang", "end": "paper-conf-ijcnlp-LiHW05", "properties": {}}, {"id": "edge:authored:author-xuanjinghuang:paper-conf-naacl-DuMHW05", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-xuanjinghuang", "end": "paper-conf-naacl-DuMHW05", "properties": {}}, {"id": "edge:authored:author-xuanjinghuang:paper-conf-ijcnlp-DuHLW04", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-xuanjinghuang", "end": "paper-conf-ijcnlp-DuHLW04", "properties": {}}, {"id": "edge:authored:author-xuanjinghuang:paper-conf-ijcnlp-YouDGHW04", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-xuanjinghuang", "end": "paper-conf-ijcnlp-YouDGHW04", "properties": {}}, {"id": "edge:authored:author-xuanjinghuang:paper-conf-isnn-YouHWYWN04", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-xuanjinghuang", "end": "paper-conf-isnn-YouHWYWN04", "properties": {}}, {"id": "edge:authored:author-xuanjinghuang:paper-conf-icadl-HuangHW04", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-xuanjinghuang", "end": "paper-conf-icadl-HuangHW04", "properties": {}}, {"id": "edge:authored:author-xuanjinghuang:paper-conf-nlprs-HuangWGI01", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-xuanjinghuang", "end": "paper-conf-nlprs-HuangWGI01", "properties": {}}, {"id": "edge:authored:author-xuanjinghuang:paper-conf-acl-vlc-HuangWW97", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-xuanjinghuang", "end": "paper-conf-acl-vlc-HuangWW97", "properties": {}}, {"id": "edge:authored:author-xueqingchen:paper-conf-isspa-XueLCW99", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-xueqingchen", "end": "paper-conf-isspa-XueLCW99", "properties": {}}, {"id": "edge:authored:author-yangshi:paper-conf-sigir-ZhangSHW09", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-yangshi", "end": "paper-conf-sigir-ZhangSHW09", "properties": {}}, {"id": "edge:authored:author-yaqianzhou:paper-conf-cikm-ZhouZHW13", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-yaqianzhou", "end": "paper-conf-cikm-ZhouZHW13", "properties": {}}, {"id": "edge:authored:author-yaqianzhou:paper-conf-emnlp-QianZZHW10", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-yaqianzhou", "end": "paper-conf-emnlp-QianZZHW10", "properties": {}}, {"id": "edge:authored:author-yaqianzhou:paper-conf-www-ZhouJZHW10", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-yaqianzhou", "end": "paper-conf-www-ZhouJZHW10", "properties": {}}, {"id": "edge:authored:author-yaqianzhou:paper-conf-airs-ZhangZHW08", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-yaqianzhou", "end": "paper-conf-airs-ZhangZHW08", "properties": {}}, {"id": "edge:authored:author-yaqianzhou:paper-conf-airs-CaoWHZL08", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-yaqianzhou", "end": "paper-conf-airs-CaoWHZL08", "properties": {}}, {"id": "edge:authored:author-yaqianzhou:paper-conf-ijcnlp-ZhangZHW05", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-yaqianzhou", "end": "paper-conf-ijcnlp-ZhangZHW05", "properties": {}}, {"id": "edge:authored:author-yaqianzhou:paper-conf-ijcnlp-ZhouHGW05", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-yaqianzhou", "end": "paper-conf-ijcnlp-ZhouHGW05", "properties": {}}, {"id": "edge:authored:author-yaqianzhou:paper-conf-emnlp-ZhouWWS03", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-yaqianzhou", "end": "paper-conf-emnlp-ZhouWWS03", "properties": {}}, {"id": "edge:authored:author-yaqianzhou:paper-conf-icmcs-FengZWL03", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-yaqianzhou", "end": "paper-conf-icmcs-FengZWL03", "properties": {}}, {"id": "edge:authored:author-yikunguo:paper-conf-iwpt-GuoWW01", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-yikunguo", "end": "paper-conf-iwpt-GuoWW01", "properties": {}}, {"id": "edge:authored:author-yongchangji:paper-journals-jvcir-FanJW01", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-yongchangji", "end": "paper-journals-jvcir-FanJW01", "properties": {}}, {"id": "edge:authored:author-yongpingdu:paper-conf-naacl-DuMHW05", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-yongpingdu", "end": "paper-conf-naacl-DuMHW05", "properties": {}}, {"id": "edge:authored:author-yongpingdu:paper-conf-ijcnlp-DuHLW04", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-yongpingdu", "end": "paper-conf-ijcnlp-DuHLW04", "properties": {}}, {"id": "edge:authored:author-yongpingdu:paper-conf-ijcnlp-YouDGHW04", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-yongpingdu", "end": "paper-conf-ijcnlp-YouDGHW04", "properties": {}}, {"id": "edge:authored:author-youdongmiao:paper-conf-icmcs-QiuMW09", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-youdongmiao", "end": "paper-conf-icmcs-QiuMW09", "properties": {}}, {"id": "edge:authored:author-yuanbinwu:paper-conf-emnlp-WuZHW11", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-yuanbinwu", "end": "paper-conf-emnlp-WuZHW11", "properties": {}}, {"id": "edge:authored:author-yuanbinwu:paper-conf-emnlp-WuZHW09", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-yuanbinwu", "end": "paper-conf-emnlp-WuZHW09", "properties": {}}, {"id": "edge:authored:author-yuefeiguo:paper-journals-pr-GuoWLFX06", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-yuefeiguo", "end": "paper-journals-pr-GuoWLFX06", "properties": {}}, {"id": "edge:authored:author-yuefeiguo:paper-journals-prl-GuoLYSW03", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-yuefeiguo", "end": "paper-journals-prl-GuoLYSW03", "properties": {}}, {"id": "edge:authored:author-yufeima:paper-conf-mmm-RongMW05", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-yufeima", "end": "paper-conf-mmm-RongMW05", "properties": {}}, {"id": "edge:authored:author-yufeima:paper-conf-icmcs-LuMZW02", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-yufeima", "end": "paper-conf-icmcs-LuMZW02", "properties": {}}, {"id": "edge:authored:author-zhaohuixie:paper-journals-pami-WuX90", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-zhaohuixie", "end": "paper-journals-pami-WuX90", "properties": {}}, {"id": "edge:authored:author-zhaohuixie:paper-conf-icpr-WuX88", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-zhaohuixie", "end": "paper-conf-icpr-WuX88", "properties": {}}, {"id": "edge:authored:author-zhaohuixie:paper-conf-icpr-XieW88", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-zhaohuixie", "end": "paper-conf-icpr-XieW88", "properties": {}}, {"id": "edge:authored:author-zhefeng:paper-journals-pr-GuoWLFX06", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-zhefeng", "end": "paper-journals-pr-GuoWLFX06", "properties": {}}, {"id": "edge:authored:author-zhefeng:paper-journals-tkde-ZhuWEFW05", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-zhefeng", "end": "paper-journals-tkde-ZhuWEFW05", "properties": {}}, {"id": "edge:authored:author-zhefeng:paper-conf-icmcs-QiuFW04", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-zhefeng", "end": "paper-conf-icmcs-QiuFW04", "properties": {}}, {"id": "edge:authored:author-zhefeng:paper-conf-icmcs-FengZWL03", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-zhefeng", "end": "paper-conf-icmcs-FengZWL03", "properties": {}}, {"id": "edge:authored:author-zhongchaofei:paper-conf-paclic-FeiHW06", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-zhongchaofei", "end": "paper-conf-paclic-FeiHW06", "properties": {}}, {"id": "edge:authored:author-zhongquanwu:paper-journals-cviu-WuWW95", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-zhongquanwu", "end": "paper-journals-cviu-WuWW95", "properties": {}}, {"id": "edge:authored:author-zhushuozhang:paper-conf-ijcnlp-ZhangZHW05", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-zhushuozhang", "end": "paper-conf-ijcnlp-ZhangZHW05", "properties": {}}, {"id": "edge:authored:author-zonggeli:paper-conf-icmcs-FengZWL03", "type": "AUTHORED", "bucket": "authored", "label": "authored", "start": "author-zonggeli", "end": "paper-conf-icmcs-FengZWL03", "properties": {}}], "nodeCounts": {"mentor": 1, "paper": 71, "author": 85}, "edgeCounts": {"authored": 262}, "mentorName": "吴立德", "mentorId": "author-4"};
+    const NODE_COLORS = {"mentor": "#C65D21", "author": "#4C78A8", "paper": "#2A9D8F"};
+    const NODE_STROKES = {"mentor": "#8B3F13", "author": "#2F5C8A", "paper": "#166C63"};
+    const EDGE_COLORS = {"advised": "#E0A458", "authored": "#61758A", "coauthored": "#C7D2DC"};
+    const MENTOR_ID = DATA.mentorId;
 
-  <div class="grid-3">
-    <div class="card">
-      <div class="card-title">移除最多的物种 Top 12</div>
-      <div class="card-sub">同物种多株系测序是主要冗余来源</div>
-      <div class="canvas-wrap" style="height:260px"><canvas id="orgChart"></canvas></div>
-    </div>
-    <div class="card">
-      <div class="card-title">真菌分类群保留率</div>
-      <div class="card-sub">按门级分类的序列保留比例</div>
-      <div class="canvas-wrap" style="height:220px"><canvas id="taxChart"></canvas></div>
-      <div class="insight warn"><strong>子囊菌门(霉菌)</strong>保留率仅 21.4%，冗余最严重；接合菌门与其他类群保留率相对较高。</div>
-    </div>
-  </div>
+    const state = {
+      query: "",
+      selected: null,
+      showLabels: true,
+      pinnedPositions: new Map(),
+      presentationMode: false,
+    };
 
-  <!-- Claude Review -->
-  <div class="card review">
-    <div class="review-header">
-      <div class="review-avatar">C</div>
-      <div>
-        <div class="review-name">Claude · Review</div>
-        <div class="review-meta">FUNGI SOD · CD-HIT 95% DEREPLICATION ANALYSIS</div>
-      </div>
-    </div>
-    <div class="review-block rb-blue">
-      <div class="review-tag">整体效果</div>
-      <p>真菌SOD数据库从 10,106 条压缩至 4,074 条，移除率 59.7%，<b>高于细菌数据集（54.9%）</b>。TSV 完全是 XLSX 的子集，无新增条目，去冗余结果符合预期。真菌更高的冗余率反映了其基因组测序项目中大量近缘株系的重复提交。</p>
-    </div>
-    <div class="review-block rb-amber">
-      <div class="review-tag">长度维度</div>
-      <p>&lt;100aa 全部移除（100%），&gt;250aa 全部移除（100%）。与细菌数据不同，真菌被移除序列的均值（269.2aa）<b>远高于</b>保留序列（204.5aa），标准差也大得多（150.9 vs 34.0），说明真菌数据库中存在大量长前体蛋白和融合序列，被 CD-HIT 识别为非典型代表而淘汰。175–220aa 区间保留率最高，是真菌成熟SOD的核心长度区间。</p>
-    </div>
-    <div class="review-block rb-green">
-      <div class="review-tag">SOD 类型维度</div>
-      <p>真菌 <b>Mn-SOD（50.7%）</b>与 <b>Cu/Zn-SOD（54.4%）</b>保留率接近，与细菌数据（Mn仅27%）形成鲜明对比。这说明真菌Mn-SOD序列多样性显著高于细菌，可能与真菌线粒体Mn-SOD在不同进化分支中的功能分化有关。Cu类型（36.2%）保留率较低，冗余程度高于Mn/Cu/Zn类型。</p>
-    </div>
-    <div class="review-block rb-red">
-      <div class="review-tag">分类群 & 高移除物种</div>
-      <p><b>子囊菌门霉菌</b>（Aspergillus、Colletotrichum等）保留率仅 21.4%，是冗余最严重的类群，与其大规模基因组计划和多株系测序直接相关。<em>Hortaea werneckii</em>（黑酵母）单物种移除最多（78条），因其特殊极端环境适应性被广泛测序。<em>Puccinia graminis</em>（秆锈病菌）同样被大量移除，反映锈菌研究的高强度测序投入。</p>
-    </div>
-  </div>
+    const graphEl = document.getElementById("graph");
+    const bodyEl = document.body;
+    const inspector = document.getElementById("inspector");
+    const inspectorContent = document.getElementById("inspectorContent");
+    let currentSvg = null;
+    let currentZoom = null;
+    let currentSimulation = null;
 
-</main>
+    function escapeHtml(v) {
+      return String(v ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+    }
 
-<footer>
-  <div>Fungi_SOD_uniport.xlsx &amp; uniprot_fungi_sod_filtered_cdhit95.tsv · CD-HIT 阈值 95%</div>
-  <div>Generated · <span>Fungi SOD Dereplication Analysis</span></div>
-</footer>
+    function kindColor(kind) { return NODE_COLORS[kind] || "#8D99AE"; }
+    function kindStroke(kind) { return NODE_STROKES[kind] || "#5F6C83"; }
+    function kindRadius(kind) {
+      if (kind === "mentor") return 26;
+      if (kind === "author") return 11;
+      return 8;
+    }
+    function edgeColor(bucket) { return EDGE_COLORS[bucket] || "#C7D2DC"; }
 
-<script>
-// ── Data ──────────────────────────────────────────────────────────────────
-const totalXlsx = 10106, totalTsv = 4074, totalRemoved = 6032;
+    function relBadgeColor(bucket) {
+      const colors = { authored: '#61758A' };
+      return colors[bucket] || '#7D8794';
+    }
 
-const lenBins = ['<100','100-150','150-175','175-190','190-200','200-210','210-220','220-250','250-300','>300'];
-const lenKept    = [0,189,753,311,260,432,442,1687,0,0];
-const lenRemoved = [128,362,655,137,83,254,158,1068,1901,1205];
-const lenRate    = [100,65.7,46.5,30.6,24.2,37.0,26.3,38.8,100,100];
+    // --- Search ---
+    function matchesQuery(node) {
+      if (!state.query) return true;
+      const hay = [node.title, node.subtitle, node.detailBody, JSON.stringify(node.properties || {})].join(" ").toLowerCase();
+      return hay.includes(state.query);
+    }
 
-const sodTypes = ['Unknown','Mn','Cu/Zn','Cu'];
-const sodRate  = [29.5,50.7,54.4,36.2];
+    function computeVisibleGraph() {
+      if (!state.query) {
+        return { nodes: DATA.nodes, edges: DATA.edges };
+      }
+      const matchedIds = new Set(DATA.nodes.filter(n => matchesQuery(n)).map(n => n.id));
+      // Include neighbors
+      const neighborIds = new Set(matchedIds);
+      DATA.edges.forEach(edge => {
+        if (matchedIds.has(edge.start) || matchedIds.has(edge.end)) {
+          neighborIds.add(edge.start);
+          neighborIds.add(edge.end);
+        }
+      });
+      const visibleNodes = DATA.nodes.filter(n => neighborIds.has(n.id));
+      const visibleEdges = DATA.edges.filter(e => neighborIds.has(e.start) && neighborIds.has(e.end));
+      return { nodes: visibleNodes, edges: visibleEdges };
+    }
 
-const histLabels = ['80','95','110','125','140','155','170','185','200','215','230','245','260','275','290'];
-const histKept    = [0,14,42,61,518,233,247,358,658,735,830,378,0,0,0];
-const histRemoved = [64,43,82,93,722,57,117,133,347,367,541,719,506,444,589];
+    // --- Inspector ---
+    function openInspector(item) {
+      if (state.presentationMode) return;
+      state.selected = item;
+      inspector.classList.add("open");
+      const legendEl = document.getElementById("floatLegend");
+      legendEl.classList.add("hidden");
 
-const topOrgs = ['Hortaea werneckii','Aureobasidium pullulans','Rhizoctonia solani',
-  'Puccinia graminis','Orbilia oligospora','Verticillium longisporum',
-  'Colletotrichum cereale','Aspergillus niger','Friedmanniomyces endolithicus',
-  'Puccinia striiformis','Cryptococcus gattii','Aureobasidium melanogenum'];
-const topOrgCounts = [78,49,48,45,34,27,23,22,22,21,21,20];
+      const nodeMap = new Map(DATA.nodes.map(n => [n.id, n]));
 
-const taxGroups = ['Ascomycota\n(霉菌)','Ascomycota\n(酵母)','Basidiomycota','Mucoromycota','Other'];
-const taxRate   = [21.4,45.4,36.9,45.5,46.8];
+      function makeToggle(id, label, content, openDefault) {
+        return `<div class="detail-toggle" onclick="(function(){ var c=document.getElementById('${id}'); c.classList.toggle('open'); var a=document.getElementById('${id}_arrow'); a.textContent=c.classList.contains('open')?'▾':'▸'; })()"><span><span id="${id}_arrow">${openDefault?'▾':'▸'}</span> ${label}</span></div><div class="detail-toggle-content${openDefault?' open':''}" id="${id}">${content}</div>`;
+      }
 
-// ── Chart config ──────────────────────────────────────────────────────────
-const gc = 'rgba(0,0,0,0.06)';
-const tc = '#6b7068';
-const fn = { family: "'DM Mono', monospace", size: 10 };
-const kC = 'rgba(26,143,86,0.65)', rC = 'rgba(196,61,32,0.6)';
-const kB = 'rgba(26,143,86,0.9)',  rB = 'rgba(196,61,32,0.85)';
+      if (item.kind) {
+        // Node
+        const badge = `<span class="kind-badge" style="background:${kindColor(item.kind)}">${escapeHtml(item.kind)}</span>`;
 
-// 1. Stacked length bar
-new Chart(document.getElementById('lenStack'), {
-  type: 'bar',
-  data: { labels: lenBins, datasets: [
-    { label: '保留', data: lenKept, backgroundColor: kC, borderColor: kB, borderWidth: 0.5 },
-    { label: '移除', data: lenRemoved, backgroundColor: rC, borderColor: rB, borderWidth: 0.5 }
-  ]},
-  options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } },
-    scales: {
-      x: { stacked: true, grid: { color: gc }, ticks: { color: tc, font: fn, maxRotation: 35, autoSkip: false } },
-      y: { stacked: true, grid: { color: gc }, ticks: { color: tc, font: fn } }
-    }}
-});
+        const outgoing = [];
+        const incoming = [];
+        DATA.edges.forEach(edge => {
+          if (edge.start === item.id) {
+            const t = nodeMap.get(edge.end);
+            if (t) outgoing.push({ edge, node: t });
+          } else if (edge.end === item.id) {
+            const s = nodeMap.get(edge.start);
+            if (s) incoming.push({ edge, node: s });
+          }
+        });
 
-// 2. SOD retention horizontal
-new Chart(document.getElementById('sodBar'), {
-  type: 'bar',
-  data: { labels: sodTypes, datasets: [{ label: '保留率%', data: sodRate,
-    backgroundColor: sodRate.map(v => v >= 50 ? 'rgba(26,143,86,0.7)' : v >= 35 ? 'rgba(196,172,20,0.65)' : 'rgba(196,61,32,0.65)'),
-    borderRadius: 4, borderSkipped: false }]},
-  options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } },
-    scales: {
-      x: { min: 0, max: 65, grid: { color: gc }, ticks: { color: tc, font: fn, callback: v => v + '%' } },
-      y: { grid: { color: 'transparent' }, ticks: { color: tc, font: fn } }
-    }}
-});
+        function renderConn(conn, dir) {
+          const n = conn.node;
+          const e = conn.edge;
+          const arrow = dir === 'out' ? '→' : '←';
+          const nBadge = `<span class="kind-badge" style="background:${kindColor(n.kind)};font-size:9px;padding:1px 5px">${escapeHtml(n.kind)}</span>`;
+          const relLabel = (e.label || e.type || 'related').replace(/_/g, ' ');
+          const sharedCount = (e.properties || {}).count;
+          const metaLine = sharedCount ? `<div class="conn-meta">${sharedCount} shared paper(s)</div>` : '';
+          return `<div class="conn-item" data-nav-node="${escapeHtml(n.id)}">
+            <div class="conn-item-header">
+              <span class="conn-arrow">${arrow}</span>
+              ${nBadge}<span class="conn-target">${escapeHtml(n.title || n.id)}</span>
+              <span class="rel-badge" style="background:${relBadgeColor(e.bucket)}">${escapeHtml(relLabel)}</span>
+            </div>
+            ${metaLine}
+          </div>`;
+        }
 
-// 3. Removal rate
-new Chart(document.getElementById('remRate'), {
-  type: 'bar',
-  data: { labels: lenBins, datasets: [{ label: '移除率%', data: lenRate,
-    backgroundColor: lenRate.map(v => v >= 90 ? 'rgba(196,61,32,0.82)' : v >= 50 ? 'rgba(196,61,32,0.52)' : v >= 30 ? 'rgba(196,172,20,0.55)' : 'rgba(26,143,86,0.6)'),
-    borderRadius: 3, borderSkipped: false }]},
-  options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } },
-    scales: {
-      x: { grid: { color: gc }, ticks: { color: tc, font: fn, maxRotation: 35, autoSkip: false } },
-      y: { min: 0, max: 110, grid: { color: gc }, ticks: { color: tc, font: fn, callback: v => v + '%' } }
-    }}
-});
+        let connHtml = '';
+        if (outgoing.length) {
+          connHtml += `<div class="conn-group-title">Outgoing → (${outgoing.length})</div>`;
+          connHtml += outgoing.map(c => renderConn(c, 'out')).join('');
+        }
+        if (incoming.length) {
+          connHtml += `<div class="conn-group-title">← Incoming (${incoming.length})</div>`;
+          connHtml += incoming.map(c => renderConn(c, 'in')).join('');
+        }
+        if (!outgoing.length && !incoming.length) {
+          connHtml = '<div style="color:var(--muted);font-size:13px;padding:8px 0">No connections.</div>';
+        }
 
-// 4. Histogram
-new Chart(document.getElementById('hist'), {
-  type: 'bar',
-  data: { labels: histLabels, datasets: [
-    { label: '保留', data: histKept, backgroundColor: 'rgba(26,143,86,0.45)', borderColor: kB, borderWidth: 0.5 },
-    { label: '移除', data: histRemoved, backgroundColor: 'rgba(196,61,32,0.38)', borderColor: rB, borderWidth: 0.5 }
-  ]},
-  options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } },
-    scales: {
-      x: { grid: { color: gc }, ticks: { color: tc, font: fn }, title: { display: true, text: '序列长度 (aa)', color: tc, font: fn } },
-      y: { grid: { color: gc }, ticks: { color: tc, font: fn } }
-    }}
-});
+        const bodyContent = `<div class="detail-block">${escapeHtml(item.detailBody || "No details.")}</div>`;
+        const propsContent = `<div class="detail-block"><pre style="white-space:pre-wrap;word-break:break-word;font-family:monospace;font-size:12px;margin:0">${escapeHtml(JSON.stringify(item.properties, null, 2))}</pre></div>`;
 
-// 5. Top organisms
-new Chart(document.getElementById('orgChart'), {
-  type: 'bar',
-  data: { labels: topOrgs, datasets: [{ label: '移除条目', data: topOrgCounts,
-    backgroundColor: rC, borderColor: rB, borderWidth: 0.5, borderRadius: 3, borderSkipped: false }]},
-  options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } },
-    scales: {
-      x: { grid: { color: gc }, ticks: { color: tc, font: fn } },
-      y: { grid: { color: 'transparent' }, ticks: { color: tc, font: { ...fn, size: 9 } } }
-    }}
-});
+        inspectorContent.innerHTML = `
+          <h2>${badge}${escapeHtml(item.title)}</h2>
+          <div class="inspector-subtitle">${escapeHtml(item.subtitle || '')}</div>
+          ${makeToggle('detail_body', 'Details', bodyContent, false)}
+          <div class="section-label">Connections (${outgoing.length + incoming.length})</div>
+          ${connHtml}
+          ${makeToggle('detail_props', 'Raw Properties', propsContent, false)}
+        `;
 
-// 6. Taxonomic group
-new Chart(document.getElementById('taxChart'), {
-  type: 'bar',
-  data: { labels: taxGroups, datasets: [{ label: '保留率%', data: taxRate,
-    backgroundColor: taxRate.map(v => v >= 45 ? 'rgba(26,143,86,0.7)' : v >= 35 ? 'rgba(196,172,20,0.65)' : 'rgba(196,61,32,0.65)'),
-    borderRadius: 5, borderSkipped: false }]},
-  options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } },
-    scales: {
-      x: { grid: { color: gc }, ticks: { color: tc, font: fn } },
-      y: { min: 0, max: 60, grid: { color: gc }, ticks: { color: tc, font: fn, callback: v => v + '%' } }
-    }}
-});
-</script>
+        inspectorContent.querySelectorAll('.conn-item[data-nav-node]').forEach(el => {
+          el.addEventListener('click', () => {
+            const tid = el.dataset.navNode;
+            const tn = nodeMap.get(tid);
+            if (tn) openInspector(tn);
+            render();
+          });
+        });
+      } else {
+        // Edge
+        const sourceNode = nodeMap.get(item.start);
+        const targetNode = nodeMap.get(item.end);
+        const propsContent = `<div class="detail-block"><pre style="white-space:pre-wrap;word-break:break-word;font-family:monospace;font-size:12px;margin:0">${escapeHtml(JSON.stringify(item.properties, null, 2))}</pre></div>`;
+
+        inspectorContent.innerHTML = `
+          <h2>${escapeHtml(item.type)}</h2>
+          <div class="inspector-subtitle">${escapeHtml(item.bucket)}</div>
+          <div class="detail-block">
+            <div class="conn-item" data-nav-node="${escapeHtml(item.start)}">
+              <div class="conn-item-header"><span class="conn-arrow">From</span> <span class="conn-target">${escapeHtml(sourceNode?.title || item.start)}</span></div>
+            </div>
+            <div class="conn-item" data-nav-node="${escapeHtml(item.end)}">
+              <div class="conn-item-header"><span class="conn-arrow">To</span> <span class="conn-target">${escapeHtml(targetNode?.title || item.end)}</span></div>
+            </div>
+          </div>
+          ${makeToggle('edge_props', 'Raw Properties', propsContent, false)}
+        `;
+        inspectorContent.querySelectorAll('.conn-item[data-nav-node]').forEach(el => {
+          el.addEventListener('click', () => {
+            const tid = el.dataset.navNode;
+            const tn = nodeMap.get(tid);
+            if (tn) openInspector(tn);
+            render();
+          });
+        });
+      }
+    }
+
+    function closeInspector() {
+      state.selected = null;
+      inspector.classList.remove("open");
+      if (!state.presentationMode) {
+        document.getElementById("floatLegend").classList.remove("hidden");
+      }
+      render();
+    }
+
+    function setPresentationMode(enabled) {
+      state.presentationMode = enabled;
+      bodyEl.classList.toggle("presentation-mode", enabled);
+      document.getElementById("presentationModeBtn").textContent = enabled
+        ? "Exit Presentation"
+        : "Presentation View";
+      if (enabled) {
+        state.selected = null;
+        inspector.classList.remove("open");
+        document.getElementById("floatLegend").classList.remove("hidden");
+      }
+      render();
+    }
+
+    // --- Selected neighborhood ---
+    function selectedNeighborhood(edges) {
+      if (!state.selected) return { nodeIds: null, edgeIds: null };
+      if (state.selected.kind) {
+        const nodeIds = new Set([state.selected.id]);
+        const edgeIds = new Set();
+        edges.forEach(edge => {
+          if (edge.start === state.selected.id || edge.end === state.selected.id) {
+            edgeIds.add(edge.id);
+            nodeIds.add(edge.start);
+            nodeIds.add(edge.end);
+          }
+        });
+        return { nodeIds, edgeIds };
+      }
+      return {
+        nodeIds: new Set([state.selected.start, state.selected.end]),
+        edgeIds: new Set([state.selected.id]),
+      };
+    }
+
+    // --- Edge path helpers ---
+    function enrichEdges(edges) {
+      const pairCounts = new Map();
+      const pairIndexes = new Map();
+      edges.forEach(edge => {
+        const key = [edge.start, edge.end].sort().join("::");
+        pairCounts.set(key, (pairCounts.get(key) || 0) + 1);
+      });
+      return edges.map(edge => {
+        const key = [edge.start, edge.end].sort().join("::");
+        const total = pairCounts.get(key) || 1;
+        const index = pairIndexes.get(key) || 0;
+        pairIndexes.set(key, index + 1);
+        let curvature = 0;
+        if (total > 1) {
+          curvature = (index - (total - 1) / 2) * 0.3;
+          if (edge.start > edge.end) curvature *= -1;
+        }
+        return Object.assign({}, edge, { pairKey: key, pairTotal: total, pairIndex: index, curvature });
+      });
+    }
+
+    function edgePath(edge) {
+      const sx = edge.source.x, sy = edge.source.y;
+      const tx = edge.target.x, ty = edge.target.y;
+      if (!edge.curvature) return `M${sx},${sy} L${tx},${ty}`;
+      const dx = tx - sx, dy = ty - sy;
+      const dist = Math.sqrt(dx*dx + dy*dy) || 1;
+      const offset = Math.max(20, dist * 0.15) * edge.curvature;
+      const cx = (sx+tx)/2 + (-dy/dist)*offset;
+      const cy = (sy+ty)/2 + (dx/dist)*offset;
+      return `M${sx},${sy} Q${cx},${cy} ${tx},${ty}`;
+    }
+
+    function labelText(node) {
+      return node.shortTitle || node.title || node.id;
+    }
+
+    // --- Main render ---
+    function render() {
+      const width = graphEl.clientWidth || window.innerWidth;
+      const height = graphEl.clientHeight || window.innerHeight;
+      const svg = d3.select(graphEl);
+      svg.selectAll("*").remove();
+      const root = svg.append("g");
+      const zoom = d3.zoom().scaleExtent([0.1, 5]).on("zoom", (event) => root.attr("transform", event.transform));
+      svg.call(zoom);
+      currentSvg = svg;
+      currentZoom = zoom;
+
+      const view = computeVisibleGraph();
+      const cx = width / 2, cy = height / 2;
+
+      // Layer rings
+      const rings = [
+        [230, "Papers"],
+        [500, "Authors"],
+      ];
+      root.append("g").selectAll("circle").data(rings).join("circle")
+        .attr("class", "layer-ring")
+        .attr("cx", cx).attr("cy", cy)
+        .attr("r", d => d[0]);
+      root.append("g").selectAll("text").data(rings).join("text")
+        .attr("class", "layer-ring-label")
+        .attr("x", cx + 12)
+        .attr("y", d => cy - d[0] + 16)
+        .text(d => d[1]);
+
+      // Initial positions
+      const authorNodes = view.nodes.filter(n => n.kind === "author");
+      const paperNodes = view.nodes.filter(n => n.kind === "paper");
+
+      function initialPos(node, i) {
+        const pinned = state.pinnedPositions.get(node.id);
+        if (pinned) return pinned;
+        if (node.kind === "mentor") return { x: cx, y: cy };
+        if (node.kind === "paper") {
+          const angle = (2 * Math.PI * i) / Math.max(paperNodes.length, 1) - Math.PI / 2;
+          const ringRadius = 230 + (i % 3) * 18;
+          return { x: cx + Math.cos(angle) * ringRadius, y: cy + Math.sin(angle) * ringRadius };
+        }
+        if (node.kind === "author") {
+          const angle = (2 * Math.PI * i) / Math.max(authorNodes.length, 1) - Math.PI / 2;
+          const ringRadius = 470 + (i % 4) * 18;
+          return { x: cx + Math.cos(angle) * ringRadius, y: cy + Math.sin(angle) * ringRadius };
+        }
+        return { x: cx, y: cy };
+      }
+
+      let authorIdx = 0;
+      let paperIdx = 0;
+      const nodes = view.nodes.map(n => {
+        const pos = initialPos(
+          n,
+          n.kind === "author" ? authorIdx++ : n.kind === "paper" ? paperIdx++ : 0,
+        );
+        return Object.assign({}, n, pos, { radius: kindRadius(n.kind) });
+      });
+
+      const nodeById = new Map(nodes.map(n => [n.id, n]));
+      const edges = enrichEdges(view.edges)
+        .filter(e => nodeById.has(e.start) && nodeById.has(e.end))
+        .map(e => Object.assign({}, e, { source: nodeById.get(e.start), target: nodeById.get(e.end) }));
+
+      // Apply pinned positions
+      nodes.forEach(node => {
+        const pinned = state.pinnedPositions.get(node.id);
+        if (pinned) {
+          node.x = pinned.x;
+          node.y = pinned.y;
+          node.fx = pinned.x;
+          node.fy = pinned.y;
+        }
+      });
+
+      // Neighborhood highlighting
+      const neighborhood = selectedNeighborhood(edges);
+      const dimNode = d => neighborhood.nodeIds && !neighborhood.nodeIds.has(d.id);
+      const dimEdge = d => neighborhood.edgeIds && !neighborhood.edgeIds.has(d.id);
+
+      // Force simulation
+      const simulation = d3.forceSimulation(nodes)
+        .force("link", d3.forceLink(edges).id(d => d.id)
+          .distance(d => {
+            if (d.bucket === "authored") {
+              const touchesMentor = d.start === MENTOR_ID || d.end === MENTOR_ID;
+              return touchesMentor ? 170 : 230;
+            }
+            return 200;
+          })
+          .strength(d => {
+            if (d.bucket === "authored") {
+              const touchesMentor = d.start === MENTOR_ID || d.end === MENTOR_ID;
+              return touchesMentor ? 0.16 : 0.1;
+            }
+            return 0.05;
+          })
+        )
+        .force("charge", d3.forceManyBody().strength(d => {
+          if (d.kind === "mentor") return -800;
+          if (d.kind === "author") return -170;
+          return -55;
+        }))
+        .force("center", d3.forceCenter(cx, cy).strength(0.01))
+        .force("radial", d3.forceRadial(d => {
+          if (d.kind === "mentor") return 0;
+          if (d.kind === "paper") return 230;
+          return 500;
+        }, cx, cy).strength(d => {
+          if (d.kind === "mentor") return 0;
+          if (d.kind === "paper") return 0.55;
+          return 0.6;
+        }))
+        .force("collision", d3.forceCollide().radius(d => d.radius + (d.kind === "paper" ? 4 : 8)))
+        .alpha(0.7);
+      currentSimulation = simulation;
+
+      // Fix mentor position
+      const mentorNode = nodes.find(n => n.kind === "mentor");
+      if (mentorNode) {
+        mentorNode.fx = cx;
+        mentorNode.fy = cy;
+      }
+
+      // Draw edges
+      const link = root.append("g")
+        .attr("stroke-linecap", "round")
+        .selectAll("path")
+        .data(edges)
+        .join("path")
+        .attr("fill", "none")
+        .attr("stroke", d => edgeColor(d.bucket))
+        .attr("stroke-opacity", d => dimEdge(d) ? 0.04 : 0.5)
+        .attr("stroke-width", 1.5)
+        .style("cursor", "pointer")
+        .on("click", (event, d) => {
+          event.stopPropagation();
+          openInspector(d);
+          render();
+        });
+
+      // Draw nodes
+      const node = root.append("g")
+        .selectAll("g")
+        .data(nodes)
+        .join("g")
+        .style("cursor", "pointer")
+        .on("click", (event, d) => {
+          event.stopPropagation();
+          openInspector(d);
+          render();
+        })
+        .call(d3.drag()
+          .on("start", (event, d) => {
+            if (!event.active) simulation.alphaTarget(0.3).restart();
+            d.fx = d.x; d.fy = d.y;
+          })
+          .on("drag", (event, d) => {
+            d.fx = event.x; d.fy = event.y;
+            state.pinnedPositions.set(d.id, { x: event.x, y: event.y });
+          })
+          .on("end", (event, d) => {
+            if (!event.active) simulation.alphaTarget(0);
+            d.vx = 0; d.vy = 0;
+            if (d.kind === "mentor") {
+              d.fx = cx; d.fy = cy;
+            } else {
+              const pinned = state.pinnedPositions.get(d.id);
+              if (pinned) { d.fx = pinned.x; d.fy = pinned.y; }
+            }
+          }));
+
+      node.append("circle")
+        .attr("r", d => d.radius)
+        .attr("fill", d => kindColor(d.kind))
+        .attr("stroke", d => state.selected && state.selected.id === d.id ? "#111827" : kindStroke(d.kind))
+        .attr("stroke-width", d => state.selected && state.selected.id === d.id ? 3 : 1.5)
+        .attr("opacity", d => dimNode(d) ? 0.12 : 1);
+
+      const labels = node.append("text")
+        .attr("class", d => `node-label node-label-${d.kind}`)
+        .attr("text-anchor", "middle")
+        .attr("dy", d => d.kind === "paper" ? d.radius + 11 : d.radius + 16)
+        .attr("opacity", d => dimNode(d) ? 0.15 : 1)
+        .style("display", state.showLabels ? "block" : "none")
+        .text(d => labelText(d));
+
+      // Tick
+      simulation.on("tick", () => {
+        link.attr("d", d => edgePath(d));
+        node.attr("transform", d => `translate(${d.x},${d.y})`);
+      });
+
+      // Click background to close
+      svg.on("click", () => {
+        closeInspector();
+      });
+    }
+
+    // --- Controls ---
+    document.getElementById("searchInput").addEventListener("input", e => {
+      state.query = e.target.value.trim().toLowerCase();
+      render();
+    });
+    document.getElementById("resetViewBtn").addEventListener("click", () => {
+      if (currentSvg && currentZoom) {
+        currentSvg.transition().duration(250).call(currentZoom.transform, d3.zoomIdentity);
+      }
+    });
+    document.getElementById("reheatBtn").addEventListener("click", () => {
+      if (currentSimulation) currentSimulation.alpha(0.8).restart();
+    });
+    document.getElementById("toggleLabelsBtn").addEventListener("click", () => {
+      state.showLabels = !state.showLabels;
+      document.getElementById("toggleLabelsBtn").textContent = state.showLabels ? "Labels: On" : "Labels: Off";
+      render();
+    });
+    document.getElementById("presentationModeBtn").addEventListener("click", () => {
+      setPresentationMode(!state.presentationMode);
+    });
+    document.getElementById("inspectorClose").addEventListener("click", (e) => {
+      e.stopPropagation();
+      closeInspector();
+    });
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && state.presentationMode) {
+        setPresentationMode(false);
+      }
+    });
+
+    // --- Init ---
+    render();
+    window.addEventListener("resize", render);
+  </script>
 </body>
 </html>
