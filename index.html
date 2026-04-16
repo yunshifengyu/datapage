@@ -52,6 +52,10 @@
     body.presentation-mode .canvas-wrap {
       background-image: none;
     }
+    body {
+      overscroll-behavior: none;
+      -webkit-tap-highlight-color: transparent;
+    }
     .canvas-wrap {
       width: 100%;
       height: 100%;
@@ -59,6 +63,8 @@
         linear-gradient(var(--grid-line) 1px, transparent 1px),
         linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
       background-size: 24px 24px;
+      overscroll-behavior: none;
+      user-select: none;
     }
     .graph-svg {
       width: 100%;
@@ -165,6 +171,60 @@
       color: #9a3412;
       transform: translateY(-1px);
       box-shadow: 0 6px 16px rgba(0,0,0,0.12);
+    }
+    .mobile-zoom-controls {
+      position: absolute;
+      right: 16px;
+      bottom: 20px;
+      z-index: 12;
+      display: none;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .mobile-zoom-btn {
+      width: 46px;
+      height: 46px;
+      border: 1px solid rgba(148,163,184,0.2);
+      background: rgba(255,255,255,0.92);
+      backdrop-filter: blur(12px);
+      border-radius: 14px;
+      color: var(--ink);
+      font-size: 20px;
+      font-weight: 700;
+      line-height: 1;
+      box-shadow: 0 8px 20px rgba(15,23,42,0.12);
+      cursor: pointer;
+    }
+    .mobile-zoom-btn[data-action="center"] {
+      font-size: 15px;
+      font-weight: 600;
+    }
+    .mobile-gesture-hint {
+      position: absolute;
+      left: 50%;
+      bottom: 84px;
+      transform: translateX(-50%);
+      z-index: 11;
+      display: none;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: rgba(15,23,42,0.72);
+      color: rgba(255,255,255,0.96);
+      font-size: 12px;
+      font-weight: 500;
+      letter-spacing: 0.01em;
+      backdrop-filter: blur(10px);
+      pointer-events: none;
+      white-space: nowrap;
+      opacity: 0;
+      transition: opacity 0.24s ease;
+    }
+    body.mobile-device .mobile-zoom-controls,
+    body.mobile-device .mobile-gesture-hint {
+      display: flex;
+    }
+    body.mobile-device .mobile-gesture-hint.visible {
+      opacity: 1;
     }
 
     /* --- Inspector panel (right, hidden by default) --- */
@@ -423,44 +483,47 @@
     }
 
     body.mobile-device .inspector {
-      top: auto;
-      right: 0;
-      left: 0;
-      bottom: 0;
-      width: auto;
-      height: min(58%, 480px);
-      max-height: calc(100% - env(safe-area-inset-top, 0px) - 68px);
+      position: fixed;
+      top: auto !important;
+      right: 0 !important;
+      left: 0 !important;
+      bottom: 0 !important;
+      width: auto !important;
+      height: min(55dvh, 460px) !important;
+      max-height: calc(100dvh - env(safe-area-inset-top, 0px) - 68px) !important;
       padding: 18px 16px calc(env(safe-area-inset-bottom, 0px) + 18px);
       border-left: none;
       border-top: 1px solid rgba(148,163,184,0.15);
       border-radius: 20px 20px 0 0;
       box-shadow: 0 -10px 30px rgba(27,39,51,0.16);
-      transform: translateY(104%);
+      overflow-y: auto;
+      transform: translateY(104%) !important;
       transition: transform 0.32s cubic-bezier(0.4, 0, 0.2, 1);
     }
     body.mobile-device .inspector.open {
-      transform: translateY(0);
+      transform: translateY(0) !important;
     }
     body.mobile-device.mobile-portrait .conn-list {
       max-height: min(22vh, 220px);
     }
     body.mobile-device.mobile-landscape .inspector {
-      top: calc(env(safe-area-inset-top, 0px) + 10px);
-      right: 10px;
-      left: auto;
-      bottom: calc(env(safe-area-inset-bottom, 0px) + 10px);
-      width: min(320px, 42vw);
-      height: auto;
-      max-height: none;
+      top: calc(env(safe-area-inset-top, 0px) + 10px) !important;
+      right: 10px !important;
+      left: auto !important;
+      bottom: calc(env(safe-area-inset-bottom, 0px) + 10px) !important;
+      width: min(320px, 42vw) !important;
+      max-width: 320px;
+      height: auto !important;
+      max-height: calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 20px) !important;
       padding: 18px 14px calc(env(safe-area-inset-bottom, 0px) + 14px);
       border-top: none;
       border-left: 1px solid rgba(148,163,184,0.15);
       border-radius: 18px;
       box-shadow: -8px 0 28px rgba(27,39,51,0.14);
-      transform: translateX(108%);
+      transform: translateX(108%) !important;
     }
     body.mobile-device.mobile-landscape .inspector.open {
-      transform: translateX(0);
+      transform: translateX(0) !important;
     }
     body.mobile-device.mobile-landscape .conn-list {
       max-height: min(38vh, 240px);
@@ -567,6 +630,14 @@
       <button class="ctrl-btn" id="presentationModeBtn">Presentation View</button>
     </div>
 
+    <div class="mobile-zoom-controls" id="mobileZoomControls" aria-label="Mobile zoom controls">
+      <button class="mobile-zoom-btn" id="zoomInBtn" type="button" aria-label="Zoom in">+</button>
+      <button class="mobile-zoom-btn" id="zoomOutBtn" type="button" aria-label="Zoom out">−</button>
+      <button class="mobile-zoom-btn" id="recenterBtn" type="button" data-action="center" aria-label="Center view">Center</button>
+    </div>
+
+    <div class="mobile-gesture-hint" id="mobileGestureHint">Pinch to zoom · drag to pan · tap node for details</div>
+
     <div class="inspector" id="inspector">
       <button class="inspector-close" id="inspectorClose" title="Close">✕</button>
       <div id="inspectorContent"></div>
@@ -592,12 +663,15 @@
       applyingTransform: false,
       pinnedPositions: new Map(),
       presentationMode: false,
+      renderedNodePositions: new Map(),
+      mobileHintDismissed: false,
     };
 
     const graphEl = document.getElementById("graph");
     const bodyEl = document.body;
     const inspector = document.getElementById("inspector");
     const inspectorContent = document.getElementById("inspectorContent");
+    const mobileGestureHint = document.getElementById("mobileGestureHint");
     let currentSvg = null;
     let currentZoom = null;
     let currentRoot = null;
@@ -728,6 +802,12 @@
     }
 
     function displayProfileForScale(scale) {
+      if (currentLayoutMetrics?.mobile) {
+        if (scale <= 0.7) return { key: "mobile-all-authors-4", authorLimit: Number.POSITIVE_INFINITY, paperLimit: 4 };
+        if (scale <= 1.15) return { key: "mobile-all-authors-8", authorLimit: Number.POSITIVE_INFINITY, paperLimit: 8 };
+        if (scale <= 1.85) return { key: "mobile-all-authors-12", authorLimit: Number.POSITIVE_INFINITY, paperLimit: 12 };
+        return { key: "mobile-all-authors-20", authorLimit: Number.POSITIVE_INFINITY, paperLimit: 20 };
+      }
       if (scale <= 0.7) return { key: "all-authors-6", authorLimit: Number.POSITIVE_INFINITY, paperLimit: 6 };
       if (scale <= 1.1) return { key: "all-authors-10", authorLimit: Number.POSITIVE_INFINITY, paperLimit: 10 };
       if (scale <= 1.8) return { key: "all-authors-16", authorLimit: Number.POSITIVE_INFINITY, paperLimit: 16 };
@@ -963,6 +1043,7 @@
 
     // --- Inspector ---
     function openInspector(item) {
+      syncDeviceModeClasses(window.innerWidth, window.innerHeight);
       if (state.presentationMode) return;
       state.selected = item;
       inspector.classList.add("open");
@@ -1348,12 +1429,57 @@
       return isTouchLikeDevice() && shortSide <= 900 && longSide <= 1600;
     }
 
-    function computeLayoutMetrics(viewportWidth, viewportHeight) {
+    function syncDeviceModeClasses(viewportWidth = window.innerWidth, viewportHeight = window.innerHeight) {
       const mobile = isCompactMobileViewport(viewportWidth, viewportHeight);
       const portrait = viewportHeight >= viewportWidth;
       bodyEl.classList.toggle("mobile-device", mobile);
       bodyEl.classList.toggle("mobile-portrait", mobile && portrait);
       bodyEl.classList.toggle("mobile-landscape", mobile && !portrait);
+      return { mobile, portrait };
+    }
+
+    function showMobileGestureHint() {
+      if (!currentLayoutMetrics?.mobile || state.mobileHintDismissed) return;
+      mobileGestureHint.classList.add("visible");
+      window.clearTimeout(showMobileGestureHint.timeoutId);
+      showMobileGestureHint.timeoutId = window.setTimeout(() => {
+        mobileGestureHint.classList.remove("visible");
+        state.mobileHintDismissed = true;
+      }, 2600);
+    }
+
+    function focusNodeInViewport(nodeId, options = {}) {
+      if (!currentSvg || !currentZoom || !currentLayoutMetrics) return;
+      const pos = state.renderedNodePositions.get(nodeId);
+      if (!pos) return;
+      const width = graphEl.clientWidth || window.innerWidth;
+      const height = graphEl.clientHeight || window.innerHeight;
+      const mobileLandscape = currentLayoutMetrics.mobile && bodyEl.classList.contains("mobile-landscape");
+      const mobilePortrait = currentLayoutMetrics.mobile && bodyEl.classList.contains("mobile-portrait");
+      const targetScale = Math.max(
+        currentLayoutMetrics.minScale,
+        Math.min(
+          currentLayoutMetrics.maxScale,
+          options.scale ?? (currentLayoutMetrics.mobile ? 0.92 : Math.max(1, state.zoomK || 1))
+        )
+      );
+      const targetX = mobileLandscape ? width * 0.34 : width * 0.5;
+      const targetY = mobilePortrait ? height * 0.34 : height * 0.5;
+      const transform = d3.zoomIdentity
+        .translate(targetX - (pos.x * targetScale), targetY - (pos.y * targetScale))
+        .scale(targetScale);
+      currentSvg.transition().duration(options.duration ?? 260).call(currentZoom.transform, transform);
+    }
+
+    function scaleCurrentZoom(factor) {
+      if (!currentSvg || !currentZoom) return;
+      const width = graphEl.clientWidth || window.innerWidth;
+      const height = graphEl.clientHeight || window.innerHeight;
+      currentSvg.transition().duration(180).call(currentZoom.scaleBy, factor, [width / 2, height / 2]);
+    }
+
+    function computeLayoutMetrics(viewportWidth, viewportHeight) {
+      const { mobile } = syncDeviceModeClasses(viewportWidth, viewportHeight);
       const layoutWidth = mobile ? Math.max(1200, viewportWidth * 2.2) : viewportWidth;
       const layoutHeight = mobile ? Math.max(960, viewportHeight * 2.0) : viewportHeight;
       const cx = layoutWidth / 2;
@@ -1458,6 +1584,7 @@
         }
       });
       svg.call(zoom);
+      svg.on("dblclick.zoom", null);
       currentSvg = svg;
       currentZoom = zoom;
 
@@ -1619,6 +1746,9 @@
           }
           openInspector(d);
           render({ preserveTransform: state.lastTransform });
+          if (currentLayoutMetrics?.mobile) {
+            requestAnimationFrame(() => focusNodeInViewport(d.id, { duration: 220, scale: d.kind === "paper" ? 1.02 : 0.96 }));
+          }
         });
 
       if (!isTouchLikeDevice()) {
@@ -1644,6 +1774,13 @@
               if (pinned) { d.fx = pinned.x; d.fy = pinned.y; }
             }
           }));
+      }
+
+      if (currentLayoutMetrics?.mobile) {
+        node.append("circle")
+          .attr("r", d => Math.max(d.radius + 10, 22))
+          .attr("fill", "transparent")
+          .attr("stroke", "none");
       }
 
       node.append("circle")
@@ -1689,6 +1826,12 @@
         simulation.stop();
         for (let i = 0; i < simulationTickBudget(nodes.length); i += 1) simulation.tick();
       }
+
+      state.renderedNodePositions = new Map(nodes.map(nodeDatum => [
+        nodeDatum.id,
+        { x: nodeDatum.x, y: nodeDatum.y, kind: nodeDatum.kind }
+      ]));
+
       link.attr("d", d => edgePath(d));
       node.attr("transform", d => `translate(${d.x},${d.y})`);
 
@@ -1707,6 +1850,7 @@
 
       // Click background to close
       svg.on("click", () => {
+        if (currentLayoutMetrics?.mobile) return;
         closeInspector();
       });
     }
@@ -1724,6 +1868,25 @@
     });
     document.getElementById("presentationModeBtn").addEventListener("click", () => {
       setPresentationMode(!state.presentationMode);
+    });
+    document.getElementById("zoomInBtn").addEventListener("click", () => {
+      state.mobileHintDismissed = true;
+      mobileGestureHint.classList.remove("visible");
+      scaleCurrentZoom(1.22);
+    });
+    document.getElementById("zoomOutBtn").addEventListener("click", () => {
+      state.mobileHintDismissed = true;
+      mobileGestureHint.classList.remove("visible");
+      scaleCurrentZoom(1 / 1.22);
+    });
+    document.getElementById("recenterBtn").addEventListener("click", () => {
+      state.mobileHintDismissed = true;
+      mobileGestureHint.classList.remove("visible");
+      if (state.selected?.id) {
+        focusNodeInViewport(state.selected.id, { duration: 220, scale: 0.96 });
+        return;
+      }
+      applyDefaultViewport(220);
     });
     document.getElementById("inspectorClose").addEventListener("click", (e) => {
       e.stopPropagation();
@@ -1753,13 +1916,18 @@
     // --- Init ---
     render();
     requestAnimationFrame(() => {
+      syncDeviceModeClasses(window.innerWidth, window.innerHeight);
       if (isCompactMobileViewport(window.innerWidth, window.innerHeight)) {
         applyDefaultViewport(0);
+        showMobileGestureHint();
       } else {
         fitGraphToViewport(0, 40);
       }
     });
-    window.addEventListener("resize", () => render({ preserveTransform: state.lastTransform }));
+    window.addEventListener("resize", () => {
+      syncDeviceModeClasses(window.innerWidth, window.innerHeight);
+      render({ preserveTransform: state.lastTransform });
+    });
   </script>
 </body>
 </html>
