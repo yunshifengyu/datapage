@@ -423,8 +423,47 @@
     }
 
     body.mobile-device .inspector {
-      width: 100%;
-      padding: 20px 16px calc(env(safe-area-inset-bottom, 0px) + 20px);
+      top: auto;
+      right: 0;
+      left: 0;
+      bottom: 0;
+      width: auto;
+      height: min(58%, 480px);
+      max-height: calc(100% - env(safe-area-inset-top, 0px) - 68px);
+      padding: 18px 16px calc(env(safe-area-inset-bottom, 0px) + 18px);
+      border-left: none;
+      border-top: 1px solid rgba(148,163,184,0.15);
+      border-radius: 20px 20px 0 0;
+      box-shadow: 0 -10px 30px rgba(27,39,51,0.16);
+      transform: translateY(104%);
+      transition: transform 0.32s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    body.mobile-device .inspector.open {
+      transform: translateY(0);
+    }
+    body.mobile-device.mobile-portrait .conn-list {
+      max-height: min(22vh, 220px);
+    }
+    body.mobile-device.mobile-landscape .inspector {
+      top: calc(env(safe-area-inset-top, 0px) + 10px);
+      right: 10px;
+      left: auto;
+      bottom: calc(env(safe-area-inset-bottom, 0px) + 10px);
+      width: min(320px, 42vw);
+      height: auto;
+      max-height: none;
+      padding: 18px 14px calc(env(safe-area-inset-bottom, 0px) + 14px);
+      border-top: none;
+      border-left: 1px solid rgba(148,163,184,0.15);
+      border-radius: 18px;
+      box-shadow: -8px 0 28px rgba(27,39,51,0.14);
+      transform: translateX(108%);
+    }
+    body.mobile-device.mobile-landscape .inspector.open {
+      transform: translateX(0);
+    }
+    body.mobile-device.mobile-landscape .conn-list {
+      max-height: min(38vh, 240px);
     }
     body.mobile-device .float-search {
       top: calc(env(safe-area-inset-top, 0px) + 10px);
@@ -1311,7 +1350,10 @@
 
     function computeLayoutMetrics(viewportWidth, viewportHeight) {
       const mobile = isCompactMobileViewport(viewportWidth, viewportHeight);
+      const portrait = viewportHeight >= viewportWidth;
       bodyEl.classList.toggle("mobile-device", mobile);
+      bodyEl.classList.toggle("mobile-portrait", mobile && portrait);
+      bodyEl.classList.toggle("mobile-landscape", mobile && !portrait);
       const layoutWidth = mobile ? Math.max(1200, viewportWidth * 2.2) : viewportWidth;
       const layoutHeight = mobile ? Math.max(960, viewportHeight * 2.0) : viewportHeight;
       const cx = layoutWidth / 2;
