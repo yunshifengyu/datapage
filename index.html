@@ -422,7 +422,7 @@
       font-weight: 500;
     }
 
-    @media (max-width: 700px) {
+    @media (max-width: 700px), ((max-height: 540px) and (hover: none) and (pointer: coarse)) {
       .inspector {
         width: 100%;
         padding: 20px 16px calc(env(safe-area-inset-bottom, 0px) + 20px);
@@ -1295,12 +1295,18 @@
       return targets;
     }
 
-    function isCompactMobileViewport() {
-      return window.matchMedia("(max-width: 700px)").matches;
+    function isCompactMobileViewport(viewportWidth = window.innerWidth, viewportHeight = window.innerHeight) {
+      const coarsePointer = window.matchMedia("(pointer: coarse)").matches
+        || window.matchMedia("(hover: none)").matches
+        || (navigator.maxTouchPoints || 0) > 0;
+      if (!coarsePointer) return false;
+      const shortSide = Math.min(viewportWidth, viewportHeight);
+      const longSide = Math.max(viewportWidth, viewportHeight);
+      return shortSide <= 700 || (shortSide <= 540 && longSide <= 1200);
     }
 
     function computeLayoutMetrics(viewportWidth, viewportHeight) {
-      const mobile = isCompactMobileViewport();
+      const mobile = isCompactMobileViewport(viewportWidth, viewportHeight);
       const layoutWidth = mobile ? Math.max(1200, viewportWidth * 2.2) : viewportWidth;
       const layoutHeight = mobile ? Math.max(960, viewportHeight * 2.0) : viewportHeight;
       const cx = layoutWidth / 2;
@@ -1700,7 +1706,7 @@
     // --- Init ---
     render();
     requestAnimationFrame(() => {
-      if (isCompactMobileViewport()) {
+      if (isCompactMobileViewport(window.innerWidth, window.innerHeight)) {
         applyDefaultViewport(0);
       } else {
         fitGraphToViewport(0, 40);
