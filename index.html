@@ -613,7 +613,7 @@
     </div>
 
     <div class="float-search">
-      <input id="searchInput" type="text" placeholder="Search author name…">
+      <input id="searchInput" type="search" placeholder="Search author name…">
     </div>
 
     <div class="float-legend" id="floatLegend">
@@ -675,6 +675,7 @@
     const inspector = document.getElementById("inspector");
     const inspectorContent = document.getElementById("inspectorContent");
     const mobileGestureHint = document.getElementById("mobileGestureHint");
+    const searchInputEl = document.getElementById("searchInput");
     let currentSvg = null;
     let currentZoom = null;
     let currentRoot = null;
@@ -841,6 +842,22 @@
           },
         );
       });
+    }
+
+    function runSearchSelection() {
+      const rawQuery = searchInputEl.value.trim();
+      state.query = rawQuery.toLowerCase();
+      if (!state.query) return;
+      const match = findBestSearchMatch(state.query);
+      if (!match) return;
+      searchInputEl.value = match.title || rawQuery;
+      activateNodeSelection(
+        match,
+        {
+          duration: 260,
+          scale: match.kind === "mentor" ? 0.88 : 0.96,
+        },
+      );
     }
 
     function displayProfileForScale(scale) {
@@ -1908,13 +1925,19 @@
     }
 
     // --- Controls ---
-    document.getElementById("searchInput").addEventListener("input", e => {
+    searchInputEl.addEventListener("input", e => {
       state.query = e.target.value.trim().toLowerCase();
-      if (!state.query) return;
-      const match = findBestSearchMatch(state.query);
-      if (match) {
-        activateNodeSelection(match, { duration: 260, scale: match.kind === "mentor" ? 0.88 : 0.96 });
-      }
+    });
+    searchInputEl.addEventListener("change", () => {
+      runSearchSelection();
+    });
+    searchInputEl.addEventListener("search", () => {
+      runSearchSelection();
+    });
+    searchInputEl.addEventListener("keydown", event => {
+      if (event.key !== "Enter") return;
+      event.preventDefault();
+      runSearchSelection();
     });
     document.getElementById("resetViewBtn").addEventListener("click", () => {
       if (currentSvg && currentZoom) {
