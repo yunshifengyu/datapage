@@ -804,6 +804,45 @@
       return String(node.title || "").toLowerCase().includes(state.query);
     }
 
+    function findBestSearchMatch(query) {
+      const normalized = String(query || "").trim().toLowerCase();
+      if (!normalized) return null;
+      const candidates = DATA.nodes.filter(node => node.kind === "author" || node.kind === "mentor");
+      const scored = candidates
+        .map(node => {
+          const title = String(node.title || "").toLowerCase();
+          if (!title.includes(normalized)) return null;
+          let score = 0;
+          if (title === normalized) score += 300;
+          if (title.startsWith(normalized)) score += 180;
+          if (title.includes(` ${normalized}`)) score += 60;
+          score += Math.max(0, 40 - Math.abs(title.length - normalized.length));
+          score += (AUTHOR_SCORE.get(node.id) || 0) * 0.2;
+          return { node, score, title };
+        })
+        .filter(Boolean)
+        .sort((left, right) => right.score - left.score || left.title.localeCompare(right.title));
+      return scored[0]?.node || null;
+    }
+
+    function activateNodeSelection(node, options = {}) {
+      if (!node) return;
+      if (node.kind === "author") {
+        state.expandedAuthorId = node.id;
+      }
+      openInspector(node);
+      render({ preserveTransform: state.lastTransform });
+      requestAnimationFrame(() => {
+        focusNodeInViewport(
+          node.id,
+          {
+            duration: options.duration ?? 220,
+            scale: options.scale ?? (node.kind === "paper" ? 1.02 : 0.96),
+          },
+        );
+      });
+    }
+
     function displayProfileForScale(scale) {
       if (currentLayoutMetrics?.mobile) {
         if (scale <= 0.7) return { key: "mobile-all-authors-4", authorLimit: Number.POSITIVE_INFINITY, paperLimit: 4 };
@@ -874,7 +913,7 @@
     }
 
     function shouldRunSimulation(view) {
-      return Boolean(state.query || state.expandedAuthorId);
+      return Boolean(state.expandedAuthorId);
     }
 
     function simulationTickBudget(nodeCount) {
@@ -889,80 +928,45 @@
       if (node.kind === "mentor") return true;
       if (state.selected?.id === node.id) return true;
       if (state.expandedAuthorId === node.id) return true;
-      if (state.query) return true;
       if (node.kind === "paper") return state.zoomK >= 1.05;
       return node.kind === "author";
     }
 
     function computeVisibleGraph() {
       const profile = displayProfileForScale(state.zoomK);
-      if (!state.query) {
-        const visibleNodeIds = new Set([MENTOR_ID]);
-        const overviewAuthorIds = AUTHOR_VISIBILITY_ORDER.slice(
-          0,
-          Number.isFinite(profile.authorLimit) ? profile.authorLimit : AUTHOR_VISIBILITY_ORDER.length,
-        );
-        overviewAuthorIds.forEach(id => visibleNodeIds.add(id));
-
-        const expandedPaperIds = new Set();
-        if (state.expandedAuthorId) {
-          visibleNodeIds.add(state.expandedAuthorId);
-          const paperIds = (AUTHOR_TO_PAPERS.get(state.expandedAuthorId) || []).slice(0, profile.paperLimit);
-          paperIds.forEach(id => {
-            visibleNodeIds.add(id);
-            expandedPaperIds.add(id);
-          });
-        }
-
-        const visibleNodes = DATA.nodes.filter(node => visibleNodeIds.has(node.id));
-        const visibleEdges = DATA.edges.filter(edge => {
-          if (!visibleNodeIds.has(edge.start) || !visibleNodeIds.has(edge.end)) return false;
-          if (edge.bucket === "advised") return true;
-          if (edge.bucket === "coauthored") return true;
-          if (edge.bucket === "authored") {
-            return isExpandedAuthorPaperEdge(edge, state.expandedAuthorId, expandedPaperIds);
-          }
-          return true;
-        });
-        return {
-          nodes: visibleNodes,
-          edges: visibleEdges,
-          profile,
-          expandedPaperIds,
-        };
-      }
-      const matchedIds = new Set(DATA.nodes.filter(n => matchesQuery(n)).map(n => n.id));
-      // Include neighbors
-      const neighborIds = new Set(matchedIds);
-      DATA.edges.forEach(edge => {
-        if (matchedIds.has(edge.start) || matchedIds.has(edge.end)) {
-          neighborIds.add(edge.start);
-          neighborIds.add(edge.end);
-        }
-      });
-      if (state.expandedAuthorId) {
-        neighborIds.add(state.expandedAuthorId);
-        (AUTHOR_TO_PAPERS.get(state.expandedAuthorId) || []).slice(0, profile.paperLimit).forEach(paperId => {
-          neighborIds.add(paperId);
-        });
-      }
-      const visibleNodes = DATA.nodes.filter(n => neighborIds.has(n.id));
-      const queryExpandedPaperIds = new Set(
-        state.expandedAuthorId
-          ? (AUTHOR_TO_PAPERS.get(state.expandedAuthorId) || []).slice(0, profile.paperLimit)
-          : [],
+      const visibleNodeIds = new Set([MENTOR_ID]);
+      const overviewAuthorIds = AUTHOR_VISIBILITY_ORDER.slice(
+        0,
+        Number.isFinite(profile.authorLimit) ? profile.authorLimit : AUTHOR_VISIBILITY_ORDER.length,
       );
+      overviewAuthorIds.forEach(id => visibleNodeIds.add(id));
+
+      const expandedPaperIds = new Set();
+      if (state.expandedAuthorId) {
+        visibleNodeIds.add(state.expandedAuthorId);
+        const paperIds = (AUTHOR_TO_PAPERS.get(state.expandedAuthorId) || []).slice(0, profile.paperLimit);
+        paperIds.forEach(id => {
+          visibleNodeIds.add(id);
+          expandedPaperIds.add(id);
+        });
+      }
+
+      const visibleNodes = DATA.nodes.filter(node => visibleNodeIds.has(node.id));
       const visibleEdges = DATA.edges.filter(edge => {
-        if (!neighborIds.has(edge.start) || !neighborIds.has(edge.end)) return false;
-        if (edge.bucket === "authored" && queryExpandedPaperIds.size) {
-          const paperNode = edgePaperNode(edge);
-          if (paperNode && queryExpandedPaperIds.has(paperNode.id)) {
-            return isExpandedAuthorPaperEdge(edge, state.expandedAuthorId, queryExpandedPaperIds);
-          }
+        if (!visibleNodeIds.has(edge.start) || !visibleNodeIds.has(edge.end)) return false;
+        if (edge.bucket === "advised") return true;
+        if (edge.bucket === "coauthored") return true;
+        if (edge.bucket === "authored") {
+          return isExpandedAuthorPaperEdge(edge, state.expandedAuthorId, expandedPaperIds);
         }
         return true;
       });
-      return { nodes: visibleNodes, edges: visibleEdges, profile, expandedPaperIds: queryExpandedPaperIds };
+      return {
+        nodes: visibleNodes,
+        edges: visibleEdges,
+        profile,
+        expandedPaperIds,
+      };
     }
 
     function halton(index, base) {
@@ -1796,14 +1800,7 @@
         .style("cursor", "pointer")
         .on("click", (event, d) => {
           event.stopPropagation();
-          if (d.kind === "author") {
-            state.expandedAuthorId = state.expandedAuthorId === d.id ? null : d.id;
-          }
-          openInspector(d);
-          render({ preserveTransform: state.lastTransform });
-          if (currentLayoutMetrics?.mobile) {
-            requestAnimationFrame(() => focusNodeInViewport(d.id, { duration: 220, scale: d.kind === "paper" ? 1.02 : 0.96 }));
-          }
+          activateNodeSelection(d);
         });
 
       if (!isTouchLikeDevice()) {
@@ -1913,7 +1910,11 @@
     // --- Controls ---
     document.getElementById("searchInput").addEventListener("input", e => {
       state.query = e.target.value.trim().toLowerCase();
-      render();
+      if (!state.query) return;
+      const match = findBestSearchMatch(state.query);
+      if (match) {
+        activateNodeSelection(match, { duration: 260, scale: match.kind === "mentor" ? 0.88 : 0.96 });
+      }
     });
     document.getElementById("resetViewBtn").addEventListener("click", () => {
       if (currentSvg && currentZoom) {
