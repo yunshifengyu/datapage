@@ -663,6 +663,7 @@
       applyingTransform: false,
       zoomGestureActive: false,
       deferredZoomTransform: null,
+      pendingResizeFrame: null,
       pinnedPositions: new Map(),
       presentationMode: false,
       renderedNodePositions: new Map(),
@@ -833,6 +834,35 @@
       const nextTransform = state.deferredZoomTransform;
       state.deferredZoomTransform = null;
       scheduleZoomRerender(nextTransform);
+    }
+
+    function handleViewportResize() {
+      const viewportWidth = window.innerWidth;
+      const viewportHeight = window.innerHeight;
+      const nextMode = syncDeviceModeClasses(viewportWidth, viewportHeight);
+      const previousMetrics = currentLayoutMetrics;
+
+      if (!previousMetrics) {
+        render({ preserveTransform: state.lastTransform });
+        return;
+      }
+
+      const previousPortrait = previousMetrics.viewportHeight >= previousMetrics.viewportWidth;
+      const widthDelta = Math.abs(viewportWidth - previousMetrics.viewportWidth);
+      const heightDelta = Math.abs(viewportHeight - previousMetrics.viewportHeight);
+      const modeChanged = nextMode.mobile !== previousMetrics.mobile;
+      const orientationChanged = nextMode.mobile && previousMetrics.mobile && (nextMode.portrait !== previousPortrait);
+      const significantResize = widthDelta > 96 || (!nextMode.mobile && heightDelta > 72);
+
+      if (nextMode.mobile && !modeChanged && !orientationChanged && !significantResize) {
+        return;
+      }
+
+      if (nextMode.mobile && state.zoomGestureActive) {
+        return;
+      }
+
+      render({ preserveTransform: state.lastTransform });
     }
 
     function isExpandedAuthorPaperEdge(edge, expandedAuthorId, expandedPaperIds) {
@@ -1950,8 +1980,14 @@
       }
     });
     window.addEventListener("resize", () => {
-      syncDeviceModeClasses(window.innerWidth, window.innerHeight);
-      render({ preserveTransform: state.lastTransform });
+      if (state.pendingResizeFrame !== null) {
+        window.clearTimeout(state.pendingResizeFrame);
+      }
+      const delay = isCompactMobileViewport(window.innerWidth, window.innerHeight) ? 140 : 0;
+      state.pendingResizeFrame = window.setTimeout(() => {
+        state.pendingResizeFrame = null;
+        handleViewportResize();
+      }, delay);
     });
   </script>
 </body>
