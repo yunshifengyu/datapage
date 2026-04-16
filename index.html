@@ -1566,8 +1566,10 @@
           }
           openInspector(d);
           render({ preserveTransform: state.lastTransform });
-        })
-        .call(d3.drag()
+        });
+
+      if (!layoutMetrics.mobile) {
+        node.call(d3.drag()
           .on("start", (event, d) => {
             if (simulation && !event.active) simulation.alphaTarget(0.3).restart();
             d.fx = d.x; d.fy = d.y;
@@ -1589,6 +1591,7 @@
               if (pinned) { d.fx = pinned.x; d.fy = pinned.y; }
             }
           }));
+      }
 
       node.append("circle")
         .attr("r", d => d.radius)
